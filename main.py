@@ -35,7 +35,7 @@ class MatFoundationSettlement:
     and geotechnical soil parameters.
     """
 
-    def __init__(self, width, length, depth, borings_data, E_data):
+    def __init__(self, width, length, depth, borings_data):
         """
         Initialize the mat foundation settlement calculator.
 
@@ -56,11 +56,10 @@ class MatFoundationSettlement:
         self.length = length
         self.depth = depth
         self.borings_data = borings_data
-        self.E_data = E_data
 
         # Storage for loading conditions
-        self.point_load = 0  # lbs
-        self.uniform_load = 0  # psf
+        self.point_load = 10000  # lbs
+        self.uniform_load = 2000  # psf
 
     def add_point_load(self, p):
         """
@@ -72,6 +71,7 @@ class MatFoundationSettlement:
             Point load magnitude (lbs)
         """
         self.point_load = p
+        print(self.point_load)
 
     def set_uniform_load(self, q):
         """
@@ -83,6 +83,7 @@ class MatFoundationSettlement:
             Uniform distributed load (psf)
         """
         self.uniform_load = q
+        print(self.uniform_load)
 
     def _boussinesq_uniform_load(self, q, B, L, z):
         """
@@ -110,19 +111,21 @@ class MatFoundationSettlement:
 
         # Simplified influence factor for rectangular loaded area
         # Using approximate formula for center point
-        m = L / z
-        n = B / z
-        #todo: go into bowles 1996 and confirm the below equation
-        #Influence factor I for rectangular area (Fadum's chart approximation)
-        term1 = 2 * m * n * math.sqrt(m ** 2 + n ** 2 + 1)
-        term2 = (m ** 2 + n ** 2 + 2) * (m ** 2 + n ** 2 + 1)
-        term3 = m ** 2 + n ** 2
+        m1 = L / B
+        n1 = z / (B / 2)
+        print(m1,n1)
+        #Influence factor I at center of rectangular area (Fadum's chart approximation)
 
-        I = (1 / (4 * math.pi)) * (term1 / term2 + math.atan(term1 / (term3 * math.sqrt(m ** 2 + n ** 2 + 1))))
+        term1 = (m1 * n1) / (math.sqrt(1 + m1 ** 2 + n1 ** 2) * (1 + n1 ** 2) * (m1 ** 2 + n1 ** 2))
+        term2 = (1 + m1 ** 2 + 2 * n1 ** 2) / ((1 + n1 ** 2) * (m1 ** 2 + n1 ** 2))
+        term3 = math.asin(m1 / (math.sqrt(m1 ** 2 + n1 ** 2) * math.sqrt(1 + n1 ** 2)))
 
+        I_c = (2 / math.pi) * (term1 * term2 + term3)
+
+        print(I_c)
         sigma_z_pl = self.point_load / (self.length * self.width)
-        sigma_z_tot = (q+sigma_z_pl) * I
-
+        sigma_z_tot = (q+sigma_z_pl) * I_c
+        print(sigma_z_pl, sigma_z_tot)
         return sigma_z_tot
 
     def calculate_stress_under_footing(self, boring_id):
@@ -187,7 +190,7 @@ class MatFoundationSettlement:
 
         depths = self.borings_data[boring_id]['depth']
         n60_values = self.borings_data[boring_id]['n60']
-        E_values = self.E_data[boring_id]['E']
+        E_values = self.borings_data[boring_id]['E']
         stress_profile = self.calculate_stress_under_footing(boring_id)
 
         settlement_profile = []
@@ -380,10 +383,17 @@ class DrainedModulus:
             self.results_text.insert(tk.END, header, "header")
             self.results_text.insert(tk.END, "-" * 85 + "\n", "header")
 
+            e_modulus = []
             for depth, soil_type, n60 in zip(data['depths'], data['soil types'], data['n60_values']):
                 if soil_type in self.soil_formulas:
                     soil_name = self.soil_formulas[soil_type]['name']
                     E = self.calculate_e_from_formula(soil_type, n60) if n60 is not None else None
+                    #TODO: this isn't storing the values. fix it
+                    # Store E values back into borings_data
+                    if 'E' not in data:
+                        data['E'] = []
+
+                    data['E'].append(e_modulus)
 
                     if E is not None:
                         line = f"{depth:<12.1f} {soil_type:<12} {soil_name:<25} {n60:<12.2f} {E:<12.2f}\n"
@@ -394,7 +404,6 @@ class DrainedModulus:
                 else:
                     line = f"{depth:<12.1f} {soil_type:<12} {'Unknown':<25} {n60:<12.2f} {'N/A':<12}\n"
                     self.results_text.insert(tk.END, line, "data")
-
             self.results_text.insert(tk.END, "\n")
 
         # Add summary
@@ -404,7 +413,9 @@ class DrainedModulus:
         self.results_text.insert(tk.END, f"Each soil type uses a different formula to calculate E from N60\n", "data")
         self.results_text.insert(tk.END, f"Click 'View Formulas' button to see the formulas for each soil type\n",
                                  "data")
-        #todo: save the values of E into something that can be used later on for calcs
+        print(self.borings_data)
+        mat_calcs = MatFoundationSettlement(width=50, length=50, depth=4, borings_data=self.borings_data)
+        mat_calcs.calculate_settlement(boring_id=self.borings_data['boring_id'])
 
 class N60:
     def __init__(self, root, borings_data=None):
@@ -478,7 +489,7 @@ class N60:
 
         # gwt input
         ttk.Label(main_frame, text="Groundwater table in feet:").grid(row=10, column=0, sticky=tk.W, pady=5)
-        self.gwt_depth_var = tk.StringVar(value="100")
+        self.gwt_depth_var = tk.StringVar(value="2")
         ttk.Entry(main_frame, textvariable=self.gwt_depth_var, width=10).grid(row=10, column=1, sticky=(tk.W), pady=5)
 
         # Unit weight
@@ -692,22 +703,22 @@ class SPT:
 
         # Boring ID input
         ttk.Label(main_frame, text="Boring ID:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.boring_id_var = tk.StringVar()
+        self.boring_id_var = tk.StringVar(value="B-1")
         ttk.Entry(main_frame, textvariable=self.boring_id_var, width=20).grid(row=1, column=1, sticky=tk.W, pady=5)
 
         # N-values input
         ttk.Label(main_frame, text="N-values (comma-separated):").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.n_values_var = tk.StringVar()
+        self.n_values_var = tk.StringVar(value="10,29,40,17")
         ttk.Entry(main_frame, textvariable=self.n_values_var, width=40).grid(row=2, column=1, sticky=(tk.W, tk.E),
                                                                              pady=5)
         # Soil-type input
         ttk.Label(main_frame, text="Soil type (comma-separated, See note):").grid(row=3, column=0, sticky=tk.W, pady=5)
-        self.soil_type_var = tk.StringVar()
+        self.soil_type_var = tk.StringVar(value="1,2,1,1")
         ttk.Entry(main_frame, textvariable=self.soil_type_var, width=40).grid(row=3, column=1, sticky=(tk.W, tk.E),
                                                                               pady=5)
         # Depths input
         ttk.Label(main_frame, text="Depths in feet (comma-separated):").grid(row=4, column=0, sticky=tk.W, pady=5)
-        self.depths_var = tk.StringVar()
+        self.depths_var = tk.StringVar(value="1,3,5,7")
         ttk.Entry(main_frame, textvariable=self.depths_var, width=40).grid(row=4, column=1, sticky=(tk.W, tk.E), pady=5)
 
         # Add boring button

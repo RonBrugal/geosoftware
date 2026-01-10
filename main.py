@@ -14,7 +14,7 @@ def convert_spt_to_n60(n_field, hammer_efficiency=0.6, borehole_diameter=1.0, sa
     N60 = n_field * ER * borehole_diameter * sampler_correction * rod_length_correction
     return N60
 
-def convert_spt_to_n160(n_field, hammer_efficiency=0.6, overburden_pressure=100, atmospheric_pressure=100.0,
+def convert_spt_to_n160(n_field, hammer_efficiency=0.6, overburden_pressure=0, atmospheric_pressure=2116.0,
                         borehole_diameter=1.0, sampler_correction=1.0, rod_length_correction=1.0):
     """Convert SPT field N-value to N160 (N1)60 using energy, equipment, and overburden correction."""
     # First calculate N60 with all equipment corrections
@@ -24,11 +24,9 @@ def convert_spt_to_n160(n_field, hammer_efficiency=0.6, overburden_pressure=100,
     # CN = (Pa / σ'v)^0.5 where Pa is atmospheric pressure and σ'v is effective overburden
     CN = (atmospheric_pressure / overburden_pressure) ** 0.5
 
-    # N160 = N60 * CN
     N160 = N60 * CN
     return N160
 
-#todo: Review this matfoundation calculator
 class MatFoundationSettlement:
     """
     Calculate settlement under a mat foundation using Boussinesq's theory
@@ -58,7 +56,7 @@ class MatFoundationSettlement:
         self.borings_data = borings_data
 
         # Storage for loading conditions
-        self.point_load = 10000  # lbs
+        self.point_load = 0  # lbs
         self.uniform_load = 2000  # psf
 
     def add_point_load(self, p):
@@ -71,7 +69,6 @@ class MatFoundationSettlement:
             Point load magnitude (lbs)
         """
         self.point_load = p
-        print(self.point_load)
 
     def set_uniform_load(self, q):
         """
@@ -83,9 +80,8 @@ class MatFoundationSettlement:
             Uniform distributed load (psf)
         """
         self.uniform_load = q
-        print(self.uniform_load)
 
-    def _boussinesq_uniform_load(self, q, B, L, z):
+    def _boussinesq_total_load(self, q, B, L, z):
         """
         Calculate vertical stress at depth z below center of rectangular area
         with uniform load using influence factor approximation.
@@ -113,19 +109,14 @@ class MatFoundationSettlement:
         # Using approximate formula for center point
         m1 = L / B
         n1 = z / (B / 2)
-        print(m1,n1)
         #Influence factor I at center of rectangular area (Fadum's chart approximation)
 
         term1 = (m1 * n1) / (math.sqrt(1 + m1 ** 2 + n1 ** 2) * (1 + n1 ** 2) * (m1 ** 2 + n1 ** 2))
         term2 = (1 + m1 ** 2 + 2 * n1 ** 2) / ((1 + n1 ** 2) * (m1 ** 2 + n1 ** 2))
         term3 = math.asin(m1 / (math.sqrt(m1 ** 2 + n1 ** 2) * math.sqrt(1 + n1 ** 2)))
-
         I_c = (2 / math.pi) * (term1 * term2 + term3)
-
-        print(I_c)
         sigma_z_pl = self.point_load / (self.length * self.width)
         sigma_z_tot = (q+sigma_z_pl) * I_c
-        print(sigma_z_pl, sigma_z_tot)
         return sigma_z_tot
 
     def calculate_stress_under_footing(self, boring_id):
@@ -145,7 +136,7 @@ class MatFoundationSettlement:
         if boring_id not in self.borings_data:
             raise ValueError(f"Boring ID '{boring_id}' not found in borings_data")
 
-        depths = self.borings_data[boring_id]['depth']
+        depths = self.borings_data[boring_id]['depths']
         stress_profile = []
 
         for depth in depths:
@@ -157,16 +148,11 @@ class MatFoundationSettlement:
                 continue
 
             # Calculate stress from uniform load
-            sigma_uniform = self._boussinesq_uniform_load(
-                self.uniform_load, self.width, self.length, z
-            )
-
-            # Calculate stress from point load
-            sigma_point = self.point_load / (self.length * self.width)
+            sigma_total = self._boussinesq_total_load(
+                self.uniform_load, self.width, self.length, z)
 
             # Total stress
-            total_stress = sigma_uniform + sigma_point
-            stress_profile.append(total_stress)
+            stress_profile.append(sigma_total)
 
         return stress_profile
 
@@ -185,11 +171,8 @@ class MatFoundationSettlement:
         """
         if boring_id not in self.borings_data:
             raise ValueError(f"Boring ID '{boring_id}' not found in borings_data")
-        if boring_id not in self.E_data:
-            raise ValueError(f"Boring ID '{boring_id}' not found in E_data")
-
-        depths = self.borings_data[boring_id]['depth']
-        n60_values = self.borings_data[boring_id]['n60']
+        depths = self.borings_data[boring_id]['depths']
+        n60_values = self.borings_data[boring_id]['n60_values']
         E_values = self.borings_data[boring_id]['E']
         stress_profile = self.calculate_stress_under_footing(boring_id)
 
@@ -203,8 +186,7 @@ class MatFoundationSettlement:
             else:
                 layer_thickness = 5  # Assume 5 ft for last layer
 
-            # PLACEHOLDER: Replace with actual settlement formula
-            settlement = (stress * layer_thickness) / E
+            settlement = ((stress * layer_thickness) / (E*1000))/12
 
             settlement_profile.append({
                 'depth': depth,
@@ -316,15 +298,15 @@ class DrainedModulus:
 
     def calculate_e_from_formula(self, soil_type, n60):
         """
-        Calculate E (psf) based on soil type and N60 value.
+        Calculate E (ksf) based on soil type and N60 value.
         Each soil type uses a different formula.
         """
         if soil_type == 1:  # Sand (NC)
-            E = 15 + 10*n60
+            E = 10*(n60+15)
             return E
 
         elif soil_type == 2:  # Sand (saturated)
-            E = 15 * 5*n60
+            E = 5*(n60+15)
             return E
 
         elif soil_type == 3:  # Sand (OC)
@@ -333,7 +315,7 @@ class DrainedModulus:
 
         elif soil_type == 4:  # Gravelly Sand
             if n60 > 15:
-                E = ((n60 + 6) * 600 + 2000) / 50
+                E = (((n60 + 6) * 600 )+ 2000) / 50
             else:
                 E = ((n60 + 6) * 600) / 50
             return E
@@ -383,17 +365,16 @@ class DrainedModulus:
             self.results_text.insert(tk.END, header, "header")
             self.results_text.insert(tk.END, "-" * 85 + "\n", "header")
 
-            e_modulus = []
             for depth, soil_type, n60 in zip(data['depths'], data['soil types'], data['n60_values']):
                 if soil_type in self.soil_formulas:
                     soil_name = self.soil_formulas[soil_type]['name']
                     E = self.calculate_e_from_formula(soil_type, n60) if n60 is not None else None
-                    #TODO: this isn't storing the values. fix it
-                    # Store E values back into borings_data
+
+                    # store E back into borings_data
                     if 'E' not in data:
                         data['E'] = []
 
-                    data['E'].append(e_modulus)
+                    data['E'].append(E)
 
                     if E is not None:
                         line = f"{depth:<12.1f} {soil_type:<12} {soil_name:<25} {n60:<12.2f} {E:<12.2f}\n"
@@ -413,9 +394,9 @@ class DrainedModulus:
         self.results_text.insert(tk.END, f"Each soil type uses a different formula to calculate E from N60\n", "data")
         self.results_text.insert(tk.END, f"Click 'View Formulas' button to see the formulas for each soil type\n",
                                  "data")
-        print(self.borings_data)
-        mat_calcs = MatFoundationSettlement(width=50, length=50, depth=4, borings_data=self.borings_data)
-        mat_calcs.calculate_settlement(boring_id=self.borings_data['boring_id'])
+        mat_calcs = MatFoundationSettlement(width=5, length=5, depth=2, borings_data=self.borings_data)
+        for boring_id in self.borings_data.keys():
+            print(mat_calcs.calculate_settlement(boring_id=boring_id))
 
 class N60:
     def __init__(self, root, borings_data=None):
@@ -597,9 +578,6 @@ Standard is 1.00 for rods longer than 10 m."""
                 return
 
             self.results_text.delete(1.0, tk.END)
-
-            n60_list = []
-            n160_list = []
 
             for boring_id, data in self.borings_data.items():
                 self.results_text.insert(tk.END, f"\n{'=' * 110}\n", "header")
@@ -882,6 +860,274 @@ def main_menu():
     exit_btn.pack(pady=10)
 
     root.mainloop()
+
+#TODO: fix this to take into consideration the effects of groundwater
+class TerzaghiBearingCapacity:
+    """
+    A class to calculate ultimate bearing capacity using Terzaghi's bearing capacity equation.
+
+    The general bearing capacity equation is:
+    qu = c'*Nc*Fcs*Fcd*Fci + q*Nq*Fqs*Fqd*Fqi + 0.5*γ*B*Nγ*Fγs*Fγd*Fγi
+
+    Where:
+    - c' = cohesion
+    - q = effective stress at foundation level (γ * D)
+    - γ = unit weight of soil
+    - B = width of foundation (diameter for circular foundation)
+    - Nc, Nq, Nγ = bearing capacity factors
+    - Fcs, Fqs, Fγs = shape factors
+    - Fcd, Fqd, Fγd = depth factors
+    - Fci, Fqi, Fγi = load inclination factors
+    """
+
+    def __init__(self, cohesion, friction_angle, unit_weight, foundation_depth,
+                 foundation_width, foundation_length=None, load_inclination=0):
+        """
+        Initialize the bearing capacity calculator.
+
+        Parameters:
+        -----------
+        cohesion : float
+            Cohesion of soil (c') in kPa or psf
+        friction_angle : float
+            Internal friction angle (φ') in degrees
+        unit_weight : float
+            Unit weight of soil (γ) in kN/m³ or pcf
+        foundation_depth : float
+            Depth of foundation (D) in m or ft
+        foundation_width : float
+            Width of foundation (B) in m or ft (diameter for circular)
+        foundation_length : float, optional
+            Length of foundation (L) in m or ft. If None, assumes square/circular foundation
+        load_inclination : float, optional
+            Inclination of load from vertical (β) in degrees. Default is 0 (vertical load)
+        """
+        self.c = cohesion
+        self.phi = friction_angle
+        self.gamma = unit_weight
+        self.D = foundation_depth
+        self.B = foundation_width
+        self.L = foundation_length if foundation_length else foundation_width
+        self.beta = load_inclination
+
+        # Convert angles to radians
+        self.phi_rad = math.radians(friction_angle)
+        self.beta_rad = math.radians(load_inclination)
+
+        # Calculate effective stress at foundation level
+        self.q = self.gamma * self.D
+
+    def calculate_bearing_capacity_factors(self):
+        """
+        Calculate Nc, Nq, and Nγ bearing capacity factors.
+
+        Returns:
+        --------
+        tuple : (Nc, Nq, Nγ)
+        """
+        # Nq = tan²(45 + φ'/2) * e^(π * tan φ')
+        Nq = (math.tan(math.radians(45) + self.phi_rad / 2) ** 2) * math.exp(math.pi * math.tan(self.phi_rad))
+
+        # Nc = (Nq - 1) * cot φ'
+        if self.phi > 0:
+            Nc = (Nq - 1) * math.tan(self.phi_rad)
+        else:
+            Nc = 5.14  # For φ = 0 (purely cohesive soil)
+
+        # Nγ = 2(Nq + 1) * tan φ'
+        Ngamma = 2 * (Nq + 1) * math.tan(self.phi_rad)
+
+        return Nc, Nq, Ngamma
+
+    def calculate_shape_factors(self):
+        """
+        Calculate shape factors Fcs, Fqs, Fγs using DeBeer (1970) relationships.
+
+        Returns:
+        --------
+        tuple : (Fcs, Fqs, Fγs)
+        """
+
+        Nc, Nq, _ = self.calculate_bearing_capacity_factors()
+
+        # Fcs = 1 + (B/L) * (Nq/Nc)
+        Fcs = 1 + (self.B / self.L) * (Nq / Nc)
+
+        # Fqs = 1 + (B/L) * tan φ'
+        Fqs = 1 + (self.B / self.L) * math.tan(self.phi_rad)
+
+        # Fγs = 1 - 0.4 * (B/L)
+        Fgammas = 1 - 0.4 * (self.B / self.L)
+
+        return Fcs, Fqs, Fgammas
+
+    def calculate_depth_factors(self):
+        """
+        Calculate depth factors Fcd, Fqd, Fγd using Hansen (1970) relationships.
+
+        Returns:
+        --------
+        tuple : (Fcd, Fqd, Fγd)
+        """
+        D_B_ratio = self.D / self.B
+        #TODO Fix math below. This is a conditional calc based on D/B calcs and it's missing parts
+        if self.phi == 0:
+            # For φ = 0
+            Fcd = 1 + 0.4 * D_B_ratio
+            Fqd = 1
+            Fgammad = 1
+        else:
+            # For φ > 0
+            Fcd = 1 + 0.4 * math.atan(D_B_ratio)
+            Fqd = 1 + 2 * math.tan(self.phi_rad) * (1 - math.sin(self.phi_rad)) ** 2 * \
+                  math.atan(D_B_ratio)
+            Fgammad = 1
+
+        return Fcd, Fqd, Fgammad
+
+    def calculate_inclination_factors(self):
+        """
+        Calculate load inclination factors Fci, Fqi, Fγi using Meyerhof (1963) relationships.
+
+        Returns:
+        --------
+        tuple : (Fci, Fqi, Fγi)
+        """
+        # Fci = Fqi = (1 - β°/90°)²
+        Fci = (1 - self.beta / 90) ** 2
+        Fqi = (1 - self.beta / 90) ** 2
+
+        # Fγi = (1 - β/φ)²
+        if self.phi > 0:
+            Fgammai = (1 - self.beta_rad / self.phi_rad) ** 2
+        else:
+            Fgammai = 1  # For φ = 0
+
+        return Fci, Fqi, Fgammai
+
+    def calculate_ultimate_bearing_capacity(self):
+        """
+        Calculate the ultimate bearing capacity using the general equation.
+
+        Returns:
+        --------
+        dict : Dictionary containing:
+            - qu: ultimate bearing capacity
+            - Nc, Nq, Nγ: bearing capacity factors
+            - All shape, depth, and inclination factors
+        """
+
+        #TODO: Make sure these are unpacking well cause it's positional
+        #Calculate bearing capacity factors
+        Nc, Nq, Ngamma = self.calculate_bearing_capacity_factors()
+
+        # Calculate shape factors
+        Fcs, Fqs, Fgammas = self.calculate_shape_factors()
+
+        # Calculate depth factors
+        Fcd, Fqd, Fgammad = self.calculate_depth_factors()
+
+        # Calculate inclination factors
+        Fci, Fqi, Fgammai = self.calculate_inclination_factors()
+
+        # Calculate ultimate bearing capacity
+        # qu = c'*Nc*Fcs*Fcd*Fci + q*Nq*Fqs*Fqd*Fqi + 0.5*γ*B*Nγ*Fγs*Fγd*Fγi
+        term1 = self.c * Nc * Fcs * Fcd * Fci
+        term2 = self.q * Nq * Fqs * Fqd * Fqi
+        term3 = 0.5 * self.gamma * self.B * Ngamma * Fgammas * Fgammad * Fgammai
+
+        qu = term1 + term2 + term3
+
+        return {
+            'qu': qu,
+            'Nc': Nc,
+            'Nq': Nq,
+            'Ngamma': Ngamma,
+            'Fcs': Fcs,
+            'Fqs': Fqs,
+            'Fgammas': Fgammas,
+            'Fcd': Fcd,
+            'Fqd': Fqd,
+            'Fgammad': Fgammad,
+            'Fci': Fci,
+            'Fqi': Fqi,
+            'Fgammai': Fgammai,
+            'term1_cohesion': term1,
+            'term2_surcharge': term2,
+            'term3_self_weight': term3
+        }
+
+    def calculate_allowable_bearing_capacity(self, factor_of_safety=3.0):
+        """
+        Calculate the allowable bearing capacity.
+
+        Parameters:
+        -----------
+        factor_of_safety : float, optional
+            Factor of safety to apply. Default is 3.0
+
+        Returns:
+        --------
+        float : Allowable bearing capacity
+        """
+        results = self.calculate_ultimate_bearing_capacity()
+        qa = results['qu'] / factor_of_safety
+        return qa
+
+    def print_results(self, factor_of_safety=3.0):
+        """
+        Print a formatted summary of the bearing capacity calculation.
+
+        Parameters:
+        -----------
+        factor_of_safety : float, optional
+            Factor of safety to apply. Default is 3.0
+        """
+        results = self.calculate_ultimate_bearing_capacity()
+        qa = self.calculate_allowable_bearing_capacity(factor_of_safety)
+
+        print("=" * 70)
+        print("TERZAGHI BEARING CAPACITY CALCULATION")
+        print("=" * 70)
+        print(f"\nInput Parameters:")
+        print(f"  Cohesion (c'):              {self.c:.2f}")
+        print(f"  Friction Angle (φ'):        {self.phi:.2f}°")
+        print(f"  Unit Weight (γ):            {self.gamma:.2f}")
+        print(f"  Foundation Depth (D):       {self.D:.2f}")
+        print(f"  Foundation Width (B):       {self.B:.2f}")
+        print(f"  Foundation Length (L):      {self.L:.2f}")
+        print(f"  Load Inclination (β):       {self.beta:.2f}°")
+        print(f"  Effective Stress (q):       {self.q:.2f}")
+
+        print(f"\nBearing Capacity Factors:")
+        print(f"  Nc = {results['Nc']:.3f}")
+        print(f"  Nq = {results['Nq']:.3f}")
+        print(f"  Nγ = {results['Ngamma']:.3f}")
+
+        print(f"\nShape Factors:")
+        print(f"  Fcs = {results['Fcs']:.3f}")
+        print(f"  Fqs = {results['Fqs']:.3f}")
+        print(f"  Fγs = {results['Fgammas']:.3f}")
+
+        print(f"\nDepth Factors:")
+        print(f"  Fcd = {results['Fcd']:.3f}")
+        print(f"  Fqd = {results['Fqd']:.3f}")
+        print(f"  Fγd = {results['Fgammad']:.3f}")
+
+        print(f"\nInclination Factors:")
+        print(f"  Fci = {results['Fci']:.3f}")
+        print(f"  Fqi = {results['Fqi']:.3f}")
+        print(f"  Fγi = {results['Fgammai']:.3f}")
+
+        print(f"\nBearing Capacity Components:")
+        print(f"  Cohesion term:      {results['term1_cohesion']:.2f}")
+        print(f"  Surcharge term:     {results['term2_surcharge']:.2f}")
+        print(f"  Self-weight term:   {results['term3_self_weight']:.2f}")
+
+        print(f"\nResults:")
+        print(f"  Ultimate Bearing Capacity (qu): {results['qu']:.2f}")
+        print(f"  Allowable Bearing Capacity (qa) with FS={factor_of_safety}: {qa:.2f}")
+        print("=" * 70)
 
 if __name__ == "__main__":
     main_menu()

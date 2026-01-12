@@ -881,7 +881,7 @@ class TerzaghiBearingCapacity:
     """
 
     def __init__(self, cohesion, friction_angle, unit_weight, foundation_depth,
-                 foundation_width, foundation_length=None, load_inclination=0):
+                 foundation_width, gwt_depth, foundation_length=None, load_inclination=0):
         """
         Initialize the bearing capacity calculator.
 
@@ -901,6 +901,8 @@ class TerzaghiBearingCapacity:
             Length of foundation (L) in m or ft. If None, assumes square/circular foundation
         load_inclination : float, optional
             Inclination of load from vertical (β) in degrees. Default is 0 (vertical load)
+        gwt_depth : flat
+            Depth to the groundwater table
         """
         self.c = cohesion
         self.phi = friction_angle
@@ -909,13 +911,23 @@ class TerzaghiBearingCapacity:
         self.B = foundation_width
         self.L = foundation_length if foundation_length else foundation_width
         self.beta = load_inclination
+        self.gwt_depth = gwt_depth
+        self.gamma_eff = self.gamma_sat - 62.4
+        #self.gamma_sat = ???
 
         # Convert angles to radians
         self.phi_rad = math.radians(friction_angle)
         self.beta_rad = math.radians(load_inclination)
 
-        # Calculate effective stress at foundation level
-        self.q = self.gamma * self.D
+    #TODO: THis funcstion needs to be called at some point. It came in last
+    # Find a way to account for gamma_sat versus gamma (moist?)
+    def groundwater_corrections(self):
+        # Calculate effective stress at foundation level considering groundwater effects
+        if self.gwt_depth >=0 and self.gwt_depth <= self.D:
+            self.q = self.gamma * self.gwt_depth + ((self.gamma)-62.4) * (self.D - self.gwt_depth)
+            self.gamma = self.gamma_sat - 62.4
+        if self.gwt_depth <= (self.D + self.B):
+            #See Das book case II of bearing capacity
 
     def calculate_bearing_capacity_factors(self):
         """
@@ -960,7 +972,6 @@ class TerzaghiBearingCapacity:
         Fgammas = 1 - 0.4 * (self.B / self.L)
 
         return Fcs, Fqs, Fgammas
-
     def calculate_depth_factors(self):
         """
         Calculate depth factors Fcd, Fqd, Fγd using Hansen (1970) relationships.
@@ -969,19 +980,31 @@ class TerzaghiBearingCapacity:
         --------
         tuple : (Fcd, Fqd, Fγd)
         """
+        Nc, Nq, _ = self.calculate_bearing_capacity_factors()
         D_B_ratio = self.D / self.B
-        #TODO Fix math below. This is a conditional calc based on D/B calcs and it's missing parts
-        if self.phi == 0:
-            # For φ = 0
-            Fcd = 1 + 0.4 * D_B_ratio
-            Fqd = 1
-            Fgammad = 1
+        D_B_ratio_rad = math.radians(D_B_ratio)
+        if D_B_ratio <= 1:
+            if self.phi == 0:
+                # For φ = 0
+                Fcd = 1 + 0.4 * D_B_ratio
+                Fqd = 1
+                Fgammad = 1
+            else:
+                # For φ > 0
+                Fqd=1+2*math.tan(self.phi_rad)*(1-math.sin(self.phi_rad)) ** 2 * D_B_ratio
+                Fcd = Fqd - (1-Fqd)/(Nc*math.tan(self.phi_rad))
+                Fgammad = 1
         else:
-            # For φ > 0
-            Fcd = 1 + 0.4 * math.atan(D_B_ratio)
-            Fqd = 1 + 2 * math.tan(self.phi_rad) * (1 - math.sin(self.phi_rad)) ** 2 * \
-                  math.atan(D_B_ratio)
-            Fgammad = 1
+            if self.phi == 0:
+                # For φ = 0
+                Fcd = 1 + 0.4 * math.atan(D_B_ratio_rad)
+                Fqd = 1
+                Fgammad = 1
+            else:
+                # For φ > 0
+                Fqd = 1 + 2 * math.tan(self.phi_rad) * (1 - math.sin(self.phi_rad)) ** 2 * math.atan(D_B_ratio_rad)
+                Fcd = Fqd - (1 - Fqd) / (Nc * math.tan(self.phi_rad))
+                Fgammad = 1
 
         return Fcd, Fqd, Fgammad
 
@@ -1017,7 +1040,6 @@ class TerzaghiBearingCapacity:
             - All shape, depth, and inclination factors
         """
 
-        #TODO: Make sure these are unpacking well cause it's positional
         #Calculate bearing capacity factors
         Nc, Nq, Ngamma = self.calculate_bearing_capacity_factors()
 

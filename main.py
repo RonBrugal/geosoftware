@@ -1,6 +1,9 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import math
+import numpy as np
+from typing import List, Dict, Tuple, Optional
+
 
 def convert_spt_to_n60(n_field, hammer_efficiency=0.6, borehole_diameter=1.0, sampler_correction=1.0,
                        rod_length_correction=1.0):
@@ -861,7 +864,6 @@ def main_menu():
 
     root.mainloop()
 
-#TODO: fix this to take into consideration the effects of groundwater
 class TerzaghiBearingCapacity:
     """
     A class to calculate ultimate bearing capacity using Terzaghi's bearing capacity equation.
@@ -912,23 +914,21 @@ class TerzaghiBearingCapacity:
         self.L = foundation_length if foundation_length else foundation_width
         self.beta = load_inclination
         self.gwt_depth = gwt_depth
+        #TODO: Find a way to relate moist and saturated unit weight to relative density? Worth asking Myron
         self.gamma_eff = self.gamma_sat - 62.4
-        #self.gamma_sat = ???
+        self.gamma_sat = None
 
         # Convert angles to radians
         self.phi_rad = math.radians(friction_angle)
         self.beta_rad = math.radians(load_inclination)
 
-    #TODO: THis funcstion needs to be called at some point. It came in last
-    # Find a way to account for gamma_sat versus gamma (moist?)
     def groundwater_corrections(self):
         # Calculate effective stress at foundation level considering groundwater effects
-        if self.gwt_depth >=0 and self.gwt_depth <= self.D:
-            self.q = self.gamma * self.gwt_depth + ((self.gamma)-62.4) * (self.D - self.gwt_depth)
-            self.gamma = self.gamma_sat - 62.4
+        if self.gwt_depth <= self.D:
+            self.q = (self.gamma * self.gwt_depth) + (self.gamma_eff * (self.D - self.gwt_depth))
+            self.gamma = self.gamma_eff
         if self.gwt_depth <= (self.D + self.B):
-            #See Das book case II of bearing capacity
-
+            self.gamma = self.gamma_eff+((self.gwt_depth - self.D)/(self.B))*(self.gamma - self.gamma_eff)
     def calculate_bearing_capacity_factors(self):
         """
         Calculate Nc, Nq, and Nγ bearing capacity factors.
@@ -1040,6 +1040,8 @@ class TerzaghiBearingCapacity:
             - All shape, depth, and inclination factors
         """
 
+        self.groundwater_corrections()
+        
         #Calculate bearing capacity factors
         Nc, Nq, Ngamma = self.calculate_bearing_capacity_factors()
 
@@ -1150,6 +1152,543 @@ class TerzaghiBearingCapacity:
         print(f"  Ultimate Bearing Capacity (qu): {results['qu']:.2f}")
         print(f"  Allowable Bearing Capacity (qa) with FS={factor_of_safety}: {qa:.2f}")
         print("=" * 70)
+
+class Stratums_and_SoilProps:
+    # Typical soil property correlations (Imperial units)
+    # Based on numerical soil type codes
+    # TODO: check these correlations
+    SOIL_PROPERTIES = {
+        1: {  # Sand (NC - Normally Consolidated)
+            'name': 'Sand (NC)',
+            'unit_weight': lambda n: 100 + 1.0 * n,  # Loose to dense (pcf)
+            'phi': lambda n: 28 + 0.4 * n,  # Common correlation for NC sand
+            'cohesion': lambda n: 0,  # Cohesionless
+            'delta': lambda n: (28 + 0.4 * n) / 2
+        },
+        2: {  # Sand (saturated)
+            'name': 'Sand (saturated)',
+            'unit_weight': lambda n: 115 + 0.5 * n,  # Saturated unit weight (pcf)
+            'phi': lambda n: 28 + 0.35 * n,  # Slightly reduced for saturated conditions
+            'cohesion': lambda n: 0,  # Cohesionless
+            'delta': lambda n: (28 + 0.35 * n) / 2
+        },
+        3: {  # Sand (OC - Overconsolidated)
+            'name': 'Sand (OC)',
+            'unit_weight': lambda n: 105 + 1.2 * n,  # Denser for OC (pcf)
+            'phi': lambda n: 30 + 0.45 * n,  # Higher friction angle for OC
+            'cohesion': lambda n: 0,  # Cohesionless
+            'delta': lambda n: (30 + 0.45 * n) / 2
+        },
+        4: {  # Gravelly Sand
+            'name': 'Gravelly Sand',
+            'unit_weight': lambda n: 115 + 1.0 * n,  # Higher density (pcf)
+            'phi': lambda n: 32 + 0.4 * n,  # Higher friction angle
+            'cohesion': lambda n: 0,  # Cohesionless
+            'delta': lambda n: (32 + 0.4 * n) / 2
+        },
+        5: {  # Clayey Sand
+            'name': 'Clayey Sand',
+            'unit_weight': lambda n: 105 + 0.8 * n,  # pcf
+            'phi': lambda n: 26 + 0.35 * n,  # Reduced friction angle
+            'cohesion': lambda n: 0.02 + 0.003 * n,  # Small cohesion (ksf)
+            'delta': lambda n: (26 + 0.35 * n) / 2
+        },
+        6: {  # Silts, sandy silts or clayey silt
+            'name': 'Silts, sandy silts or clayey silt',
+            'unit_weight': lambda n: 100 + 0.7 * n,  # pcf
+            'phi': lambda n: 24 + 0.3 * n,  # Lower friction angle
+            'cohesion': lambda n: 0.025 + 0.004 * n,  # Moderate cohesion (ksf)
+            'delta': lambda n: (24 + 0.3 * n) / 2
+        }
+    }
+
+    def __init__(self, thickness: float = None, unit_weight: float = None,
+                 phi: float = None, cohesion: float = 0, delta: Optional[float] = None,
+                 n_value: float = None, soil_type: int = None):
+        """
+        Initialize a soil layer either with direct properties or from N-value correlations.
+
+        Args:
+            thickness: Layer thickness (ft)
+            unit_weight: Unit weight (pcf - pounds per cubic foot)
+            phi: Friction angle (degrees)
+            cohesion: Cohesion (ksf - kips per square foot)
+            delta: Wall friction angle (degrees), defaults to phi/2
+            n_value: SPT N-value for property correlation
+            soil_type: Soil type code (1-6):
+                1: Sand (NC)
+                2: Sand (saturated)
+                3: Sand (OC)
+                4: Gravelly Sand
+                5: Clayey Sand
+                6: Silts, sandy silts or clayey silt
+        """
+        self.thickness = thickness
+
+        # If N-value and soil type provided, use correlations
+        if n_value is not None and soil_type is not None:
+            # Validate soil type code
+            if soil_type not in self.SOIL_PROPERTIES:
+                raise ValueError(f"Invalid soil type code: {soil_type}. Must be 1-6.")
+
+            props = self.SOIL_PROPERTIES[soil_type]
+
+            self.soil_type_name = props['name']
+            self.unit_weight = unit_weight if unit_weight is not None else props['unit_weight'](n_value)
+            self.phi = phi if phi is not None else props['phi'](n_value)
+            self.cohesion = cohesion if cohesion is not None else props['cohesion'](n_value)
+            self.delta = delta if delta is not None else props['delta'](n_value)
+        else:
+            # Use provided values or defaults
+            self.soil_type_name = 'Unspecified'
+            self.unit_weight = unit_weight if unit_weight is not None else 115.0  # pcf
+            self.phi = phi if phi is not None else 30.0
+            self.cohesion = cohesion
+            self.delta = delta if delta is not None else self.phi / 2
+
+    @classmethod
+    def from_boring_data(cls, boring_data: dict, boring_id: str) -> List['Stratums_and_SoilProps']:
+        """
+        Create soil layers from boring data dictionary.
+
+        Args:
+            boring_data: Dictionary with structure:
+                {boring_id: {
+                    'n_values': [list of N values],
+                    'depths': [list of depths in feet],
+                    'soil_types': [list of soil type codes 1-6]
+                }}
+            boring_id: ID of the boring to use
+
+        Returns:
+            List of SoilLayer objects
+        """
+        if boring_id not in boring_data:
+            raise ValueError(f"Boring ID '{boring_id}' not found in boring data")
+
+        data = boring_data[boring_id]
+        n_values = data['n_values']
+        depths = data['depths']
+        soil_types = data['soil_types']
+
+        # Validate data
+        if not (len(n_values) == len(depths) == len(soil_types)):
+            raise ValueError("n_values, depths, and soil_types must have same length")
+
+        layers = []
+
+        for i in range(len(depths)):
+            # Calculate thickness
+            if i == 0:
+                thickness = depths[i]
+            else:
+                thickness = depths[i] - depths[i - 1]
+
+            # Create layer using N-value correlation
+            layer = cls(
+                thickness=thickness,
+                n_value=n_values[i],
+                soil_type=soil_types[i]
+            )
+
+            layers.append(layer)
+
+        return layers
+
+    def __repr__(self):
+        return (f"SoilLayer(type={self.soil_type_name}, thickness={self.thickness:.2f} ft, "
+                f"γ={self.unit_weight:.1f} pcf, φ={self.phi:.1f}°, "
+                f"c={self.cohesion:.3f} ksf)")
+
+
+class LineLoad:
+    def __init__(self, magnitude: float, distance: float):
+        """
+        Line load (point load).
+
+        Args:
+            magnitude: Load magnitude (kN/m)
+            distance: Horizontal distance from wall (m)
+        """
+        self.magnitude = magnitude
+        self.distance = distance
+
+class DistributedLoad:
+    def __init__(self, magnitude: float, start_distance: float, end_distance: float):
+        """
+        Distributed surcharge load.
+
+        Args:
+            magnitude: Load magnitude (kPa)
+            start_distance: Start distance from wall (m)
+            end_distance: End distance from wall (m)
+        """
+        self.magnitude = magnitude
+        self.start_distance = start_distance
+        self.end_distance = end_distance
+
+class Strut:
+    def __init__(self, depth: float, spacing: float = 1.0):
+        """
+        Strut/brace support.
+
+        Args:
+            depth: Depth from top of wall (m)
+            spacing: Tributary spacing (m)
+        """
+        self.depth = depth
+        self.spacing = spacing
+
+class LateralEarthPressure:
+    def __init__(self, soil_layers: List[Stratums_and_SoilProps], wall_height: float,
+                 theory: str = 'rankine', line_loads: List[LineLoad] = None,
+                 distributed_loads: List[DistributedLoad] = None,
+                 struts: List[Strut] = None, wall_type: str = 'retaining'):
+        """
+        Initialize lateral earth pressure calculator.
+
+        Args:
+            soil_layers: List of soil layers from top to bottom
+            wall_height: Total wall height (m)
+            theory: 'rankine', 'coulomb', 'fhwa', or 'peck'
+            line_loads: List of line loads
+            distributed_loads: List of distributed loads
+            struts: List of struts/braces
+            wall_type: 'retaining' or 'braced'
+        """
+        self.soil_layers = soil_layers
+        self.wall_height = wall_height
+        self.theory = theory.lower()
+        self.line_loads = line_loads if line_loads else []
+        self.distributed_loads = distributed_loads if distributed_loads else []
+        self.struts = struts if struts else []
+        self.wall_type = wall_type
+        self.excavation_depth = wall_height
+
+    def calculate_rankine_ka(self, phi: float, beta: float = 0) -> float:
+        """Calculate Rankine active earth pressure coefficient."""
+        phi_rad = np.radians(phi)
+        beta_rad = np.radians(beta)
+
+        cos_beta = np.cos(beta_rad)
+        cos_phi = np.cos(phi_rad)
+
+        numerator = cos_beta * (cos_beta - np.sqrt(cos_beta ** 2 - cos_phi ** 2))
+        denominator = cos_beta + np.sqrt(cos_beta ** 2 - cos_phi ** 2)
+
+        return numerator / denominator
+
+    def calculate_rankine_kp(self, phi: float, beta: float = 0) -> float:
+        """Calculate Rankine passive earth pressure coefficient."""
+        phi_rad = np.radians(phi)
+        beta_rad = np.radians(beta)
+
+        cos_beta = np.cos(beta_rad)
+        cos_phi = np.cos(phi_rad)
+
+        numerator = cos_beta * (cos_beta + np.sqrt(cos_beta ** 2 - cos_phi ** 2))
+        denominator = cos_beta - np.sqrt(cos_beta ** 2 - cos_phi ** 2)
+
+        return numerator / denominator
+
+    #TODO: The form of the coulomb formulas is correct but the terms are in the wrong spot. Fix and rename variables to convention
+    def calculate_coulomb_ka(self, phi: float, delta: float,
+                             beta: float = 0, alpha: float = 90) -> float:
+        """Calculate Coulomb active earth pressure coefficient."""
+        phi_rad = np.radians(phi)
+        delta_rad = np.radians(delta)
+        beta_rad = np.radians(beta)
+        alpha_rad = np.radians(alpha)
+
+        sin_phi_plus_delta = np.sin(phi_rad + delta_rad)
+        sin_phi_minus_beta = np.sin(phi_rad - beta_rad)
+        sin_alpha_plus_delta = np.sin(alpha_rad + delta_rad)
+        sin_alpha_minus_beta = np.sin(alpha_rad - beta_rad)
+
+        sqrt_term = np.sqrt(sin_phi_plus_delta * sin_phi_minus_beta /
+                            (sin_alpha_plus_delta * sin_alpha_minus_beta))
+
+        numerator = np.sin(alpha_rad + phi_rad) ** 2
+        denominator = (np.sin(alpha_rad) ** 2 * sin_alpha_minus_beta *
+                       (1 + sqrt_term) ** 2)
+
+        return numerator / denominator
+
+    def calculate_coulomb_kp(self, phi: float, delta: float,
+                             beta: float = 0, alpha: float = 90) -> float:
+        """Calculate Coulomb passive earth pressure coefficient."""
+        phi_rad = np.radians(phi)
+        delta_rad = np.radians(delta)
+        beta_rad = np.radians(beta)
+        alpha_rad = np.radians(alpha)
+
+        sin_phi_minus_delta = np.sin(phi_rad - delta_rad)
+        sin_phi_plus_beta = np.sin(phi_rad + beta_rad)
+        sin_alpha_minus_delta = np.sin(alpha_rad - delta_rad)
+        sin_alpha_plus_beta = np.sin(alpha_rad + beta_rad)
+
+        sqrt_term = np.sqrt(sin_phi_minus_delta * sin_phi_plus_beta /
+                            (sin_alpha_minus_delta * sin_alpha_plus_beta))
+
+        numerator = np.sin(alpha_rad - phi_rad) ** 2
+        denominator = (np.sin(alpha_rad) ** 2 * sin_alpha_plus_beta *
+                       (1 - sqrt_term) ** 2)
+
+        return numerator / denominator
+
+    def calculate_fhwa_envelope(self, depth: float, soil_type: str = 'sand') -> float:
+        """Calculate FHWA apparent earth pressure envelope."""
+        H = self.excavation_depth
+
+        if soil_type == 'sand':
+            gamma = self.get_average_unit_weight()
+            phi = self.get_average_friction_angle()
+            Ka = self.calculate_rankine_ka(phi)
+
+            if depth <= 0.25 * H:
+                pressure = 0.65 * Ka * gamma * H * (depth / (0.25 * H))
+            else:
+                pressure = 0.65 * Ka * gamma * H
+        else:  # clay
+            gamma = self.get_average_unit_weight()
+            c = self.get_average_cohesion()
+            pressure = max(0, gamma * H - 4 * c)
+
+        return pressure
+
+    def calculate_peck_envelope(self, depth: float, soil_type: str = 'sand') -> float:
+        """Calculate Peck's apparent earth pressure envelope."""
+        H = self.excavation_depth
+        gamma = self.get_average_unit_weight()
+
+        if soil_type == 'sand':
+            Ka = 0.65 * self.calculate_rankine_ka(self.get_average_friction_angle())
+            pressure = Ka * gamma * H
+        else:  # clay
+            c = self.get_average_cohesion()
+            m = min(1.0, 4 / (self.excavation_depth / (2 * c / gamma)))
+            pressure = gamma * H * m
+
+        return pressure
+
+    def get_average_unit_weight(self) -> float:
+        """Get weighted average unit weight."""
+        if not self.soil_layers:
+            return 18.0
+        total_depth = sum(layer.thickness for layer in self.soil_layers)
+        weighted_sum = sum(layer.unit_weight * layer.thickness
+                           for layer in self.soil_layers)
+        return weighted_sum / total_depth
+
+    def get_average_friction_angle(self) -> float:
+        """Get weighted average friction angle."""
+        if not self.soil_layers:
+            return 30.0
+        total_depth = sum(layer.thickness for layer in self.soil_layers)
+        weighted_sum = sum(layer.phi * layer.thickness
+                           for layer in self.soil_layers)
+        return weighted_sum / total_depth
+
+    def get_average_cohesion(self) -> float:
+        """Get weighted average cohesion."""
+        if not self.soil_layers:
+            return 0.0
+        total_depth = sum(layer.thickness for layer in self.soil_layers)
+        weighted_sum = sum(layer.cohesion * layer.thickness
+                           for layer in self.soil_layers)
+        return weighted_sum / total_depth
+
+    def boussinesq_line_load(self, load: float, distance: float, depth: float) -> float:
+        """Calculate horizontal stress from line load using Boussinesq theory."""
+        if depth <= 0:
+            return 0
+
+        Q = load
+        x = distance
+        z = depth
+
+        r_squared = x ** 2 + z ** 2
+        sigma_h = (2 * Q * x ** 2 * z) / (np.pi * r_squared ** 2)
+
+        return sigma_h
+
+    def boussinesq_distributed_load(self, load: float, start_dist: float,
+                                    end_dist: float, depth: float) -> float:
+        """Calculate horizontal stress from distributed load using Boussinesq theory."""
+        if depth <= 0:
+            return 0
+
+        q = load
+        z = depth
+
+        beta1 = np.arctan2(start_dist, z)
+        beta2 = np.arctan2(end_dist, z)
+
+        sigma_h = (q / np.pi) * (beta2 - beta1 +
+                                 0.5 * (np.sin(2 * beta2) - np.sin(2 * beta1)))
+
+        return sigma_h
+
+    def calculate_pressure_profile(self, side: str = 'active',
+                                   num_points: int = 100) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Calculate lateral earth pressure profile.
+
+        Args:
+            side: 'active' or 'passive'
+            num_points: Number of points in profile
+
+        Returns:
+            Tuple of (depths, pressures) arrays
+        """
+        depths = np.linspace(0, self.wall_height, num_points)
+        pressures = np.zeros(num_points)
+
+        for i, depth in enumerate(depths):
+            pressure = 0
+
+            if self.theory == 'fhwa':
+                pressure = self.calculate_fhwa_envelope(depth, 'sand')
+            elif self.theory == 'peck':
+                pressure = self.calculate_peck_envelope(depth, 'sand')
+            else:
+                # Rankine or Coulomb
+                cumulative_depth = 0
+                sigma_v = 0
+
+                for layer in self.soil_layers:
+                    if depth > cumulative_depth and depth <= cumulative_depth + layer.thickness:
+                        depth_in_layer = depth - cumulative_depth
+                        sigma_v += layer.unit_weight * depth_in_layer
+
+                        if side == 'active':
+                            if self.theory == 'coulomb':
+                                K = self.calculate_coulomb_ka(layer.phi, layer.delta)
+                            else:
+                                K = self.calculate_rankine_ka(layer.phi)
+                        else:  # passive
+                            if self.theory == 'coulomb':
+                                K = self.calculate_coulomb_kp(layer.phi, layer.delta)
+                            else:
+                                K = self.calculate_rankine_kp(layer.phi)
+
+                        pressure = K * sigma_v - 2 * layer.cohesion * np.sqrt(K)
+                        break
+                    elif depth > cumulative_depth + layer.thickness:
+                        sigma_v += layer.unit_weight * layer.thickness
+                        cumulative_depth += layer.thickness
+
+            # Add surcharge from line loads
+            for line_load in self.line_loads:
+                pressure += self.boussinesq_line_load(
+                    line_load.magnitude, line_load.distance, depth)
+
+            # Add surcharge from distributed loads
+            for dist_load in self.distributed_loads:
+                pressure += self.boussinesq_distributed_load(
+                    dist_load.magnitude, dist_load.start_distance,
+                    dist_load.end_distance, depth)
+
+            pressures[i] = max(0, pressure)
+
+        return depths, pressures
+
+    def calculate_strut_reactions(self, depths: np.ndarray,
+                                  pressures: np.ndarray) -> List[Dict]:
+        """
+        Calculate reactions at strut locations.
+
+        Args:
+            depths: Depth array from pressure profile
+            pressures: Pressure array from pressure profile
+
+        Returns:
+            List of dicts with 'depth' and 'reaction' keys
+        """
+        reactions = []
+
+        sorted_struts = sorted(self.struts, key=lambda s: s.depth)
+
+        for i, strut in enumerate(sorted_struts):
+            strut_depth = strut.depth
+            spacing = strut.spacing
+
+            # Interpolate pressure at strut depth
+            pressure_at_strut = np.interp(strut_depth, depths, pressures)
+
+            # Calculate tributary height
+            if i == 0:
+                if len(sorted_struts) > 1:
+                    tributary_height = ((sorted_struts[1].depth - strut_depth) / 2 +
+                                        strut_depth)
+                else:
+                    tributary_height = self.wall_height
+            elif i == len(sorted_struts) - 1:
+                tributary_height = ((strut_depth - sorted_struts[i - 1].depth) / 2 +
+                                    (self.wall_height - strut_depth))
+            else:
+                tributary_height = ((strut_depth - sorted_struts[i - 1].depth) / 2 +
+                                    (sorted_struts[i + 1].depth - strut_depth) / 2)
+
+            # Calculate average pressure over tributary area
+            start_depth = max(0, strut_depth - tributary_height / 2)
+            end_depth = min(self.wall_height, strut_depth + tributary_height / 2)
+
+            mask = (depths >= start_depth) & (depths <= end_depth)
+            avg_pressure = np.mean(pressures[mask]) if np.any(mask) else 0
+
+            reaction = avg_pressure * tributary_height * spacing
+
+            reactions.append({
+                'depth': strut_depth,
+                'reaction': reaction
+            })
+
+        return reactions
+
+    def calculate_shear_moment(self, depths: np.ndarray, pressures: np.ndarray,
+                               strut_reactions: List[Dict]) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Calculate shear and moment diagrams.
+
+        Args:
+            depths: Depth array from pressure profile
+            pressures: Pressure array from pressure profile
+            strut_reactions: List of strut reactions
+
+        Returns:
+            Tuple of (shear, moment) arrays
+        """
+        num_points = len(depths)
+        shear = np.zeros(num_points)
+        moment = np.zeros(num_points)
+
+        dz = self.wall_height / (num_points - 1)
+
+        for i in range(num_points):
+            depth = depths[i]
+            pressure = pressures[i]
+
+            # Check for strut at this depth
+            strut_at_depth = None
+            for strut_reaction in strut_reactions:
+                if abs(strut_reaction['depth'] - depth) < dz / 2:
+                    strut_at_depth = strut_reaction
+                    break
+
+            # Calculate incremental load
+            if i > 0:
+                avg_pressure = (pressures[i - 1] + pressure) / 2
+                incremental_load = avg_pressure * dz
+
+                shear[i] = shear[i - 1] + incremental_load
+                moment[i] = moment[i - 1] + shear[i - 1] * dz + incremental_load * dz / 2
+
+            # Apply strut reaction
+            if strut_at_depth:
+                shear[i] -= strut_at_depth['reaction']
+
+        return shear, moment
 
 if __name__ == "__main__":
     main_menu()

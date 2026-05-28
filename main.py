@@ -1156,7 +1156,7 @@ class TerzaghiBearingCapacity:
 class Stratums_and_SoilProps:
     # Typical soil property correlations (Imperial units)
     # Based on numerical soil type codes
-    # TODO: check these correlations
+    # TODO: check these correlations and have the code return these in the list
     SOIL_PROPERTIES = {
         1: {  # Sand (NC - Normally Consolidated)
             'name': 'Sand (NC)',
@@ -1300,7 +1300,6 @@ class Stratums_and_SoilProps:
                 f"γ={self.unit_weight:.1f} pcf, φ={self.phi:.1f}°, "
                 f"c={self.cohesion:.3f} ksf)")
 
-
 class LineLoad:
     def __init__(self, magnitude: float, distance: float):
         """
@@ -1365,33 +1364,184 @@ class LateralEarthPressure:
         self.wall_type = wall_type
         self.excavation_depth = wall_height
 
-    def calculate_rankine_ka(self, phi: float, beta: float = 0) -> float:
-        """Calculate Rankine active earth pressure coefficient."""
-        phi_rad = np.radians(phi)
-        beta_rad = np.radians(beta)
+    def calculate_rankine_ka_profile(self, boring_id: str, boring_data: dict, gamma: float, phi: float,
+                                     alpha: float = 0) -> dict:
+        """
+        Calculate K_a (active earth pressure coefficient) for all depths in a boring
+        for c-phi soil with vertical backface
 
-        cos_beta = np.cos(beta_rad)
-        cos_phi = np.cos(phi_rad)
+        Parameters:
+        boring_id: ID of the boring to analyze
+        boring_data: Dictionary containing boring information
+        gamma: unit weight of soil
+        phi: internal friction angle (in radians)
+        alpha: slope angle (in radians)
 
-        numerator = cos_beta * (cos_beta - np.sqrt(cos_beta ** 2 - cos_phi ** 2))
-        denominator = cos_beta + np.sqrt(cos_beta ** 2 - cos_phi ** 2)
+        Returns:
+        Dictionary with depths and corresponding K_a values
+        """
+        if boring_id not in boring_data:
+            raise ValueError(f"Boring ID {boring_id} not found in boring_data")
 
-        return numerator / denominator
+        boring = boring_data[boring_id]
+        depths = boring['depths']
+        #TODO: This must come from the soil prop. list not the boring
+        cohesion_values = boring['cohesion']
 
-    def calculate_rankine_kp(self, phi: float, beta: float = 0) -> float:
-        """Calculate Rankine passive earth pressure coefficient."""
-        phi_rad = np.radians(phi)
-        beta_rad = np.radians(beta)
+        ka_values = []
+        z_crit_values = []
 
-        cos_beta = np.cos(beta_rad)
-        cos_phi = np.cos(phi_rad)
+        for i, depth in enumerate(depths):
+            c = cohesion_values[i]
+            gamma_z = gamma * depth
 
-        numerator = cos_beta * (cos_beta + np.sqrt(cos_beta ** 2 - cos_phi ** 2))
-        denominator = cos_beta - np.sqrt(cos_beta ** 2 - cos_phi ** 2)
+            # Handle case where depth is 0 or very small
+            if gamma_z < 1e-6:
+                ka_values.append(None)  # or use a default value
+                continue
 
-        return numerator / denominator
+            cos_phi = np.cos(phi)
+            cos_alpha = np.cos(alpha)
+            sin_phi = np.sin(phi)
 
-    #TODO: The form of the coulomb formulas is correct but the terms are in the wrong spot. Fix and rename variables to convention
+            # Term inside the square root
+            sqrt_term = np.sqrt(
+                4 * cos_alpha ** 2 * (cos_alpha ** 2 - cos_phi ** 2) +
+                4 * (c / gamma_z) ** 2 * cos_phi ** 2 +
+                8 * (c / gamma_z) * cos_alpha ** 2 * sin_phi * cos_phi
+            )
+
+            # Main calculation
+            K_a = (1 / cos_phi ** 2) * (
+                    2 * cos_alpha ** 2 + 2 * (c / gamma_z) * cos_phi * sin_phi -
+                    sqrt_term - 1
+            )
+
+            z_crit = ((2 * c) / gamma) * (np.sqrt((1 + np.sin(phi)) / (1 - np.sin(phi))))
+
+            z_crit_values.append(z_crit)
+            ka_values.append(K_a)
+
+        return {
+            'boring_id': boring_id,
+            'depths': depths,
+            'ka_values': ka_values,
+            'cohesion': cohesion_values,
+            'critical depth': z_crit_values
+        }
+
+    def calculate_rankine_ka_all_borings(self, boring_data: dict, gamma: float, phi: float, alpha: float = 0) -> dict:
+        """
+        Calculate K_a for all borings in the dataset
+
+        Parameters:
+        boring_data: Dictionary containing all boring information
+        gamma: unit weight of soil
+        phi: internal friction angle (in radians)
+        alpha: slope angle (in radians)
+
+        Returns:
+        Dictionary with boring_id as keys and Ka profiles as values
+        """
+        results = {}
+
+        for boring_id in boring_data.keys():
+            results[boring_id] = self.calculate_rankine_ka_profile(
+                boring_id, boring_data, gamma, phi, alpha
+            )
+
+        return results
+    
+    def calculate_rankine_kp_profile(self, boring_id: str, boring_data: dict, gamma: float, phi: float,
+                                     alpha: float = 0) -> dict:
+        """
+        Calculate K_p (passive earth pressure coefficient) for all depths in a boring
+        for c-phi soil with vertical backface
+
+        Parameters:
+        boring_id: ID of the boring to analyze
+        boring_data: Dictionary containing boring information
+        gamma: unit weight of soil
+        phi: internal friction angle (in radians)
+        alpha: slope angle (in radians)
+
+        Returns:
+        Dictionary with depths and corresponding K_a values
+        """
+        if boring_id not in boring_data:
+            raise ValueError(f"Boring ID {boring_id} not found in boring_data")
+
+        boring = boring_data[boring_id]
+        depths = boring['depths']
+        #TODO: This must come from the soil prop. list not the boring
+        cohesion_values = boring['cohesion']
+
+        ka_values = []
+        z_crit_values = []
+
+        for i, depth in enumerate(depths):
+            c = cohesion_values[i]
+            gamma_z = gamma * depth
+
+            # Handle case where depth is 0 or very small
+            if gamma_z < 1e-6:
+                ka_values.append(None)  # or use a default value
+                continue
+
+            cos_phi = np.cos(phi)
+            cos_alpha = np.cos(alpha)
+            sin_phi = np.sin(phi)
+
+            # Term inside the square root
+            sqrt_term = np.sqrt(
+                4 * cos_alpha ** 2 * (cos_alpha ** 2 - cos_phi ** 2) +
+                4 * (c / gamma_z) ** 2 * cos_phi ** 2 +
+                8 * (c / gamma_z) * cos_alpha ** 2 * sin_phi * cos_phi
+            )
+            #TODO: Just get the Ka from the other function?
+            # Main calculation: compute Ka first, then Kp = 1/Ka
+            K_a = (1 / cos_phi ** 2) * (
+                    2 * cos_alpha ** 2 + 2 * (c / gamma_z) * cos_phi * sin_phi -
+                    sqrt_term - 1
+            )
+            K_p = 1 / K_a if K_a != 0 else None
+
+            z_crit = ((2 * c) / gamma) * (np.sqrt((1 + np.sin(phi)) / (1 - np.sin(phi))))
+
+            z_crit_values.append(z_crit)
+            ka_values.append(K_p)
+
+        return {
+            'boring_id': boring_id,
+            'depths': depths,
+            'ka_values': ka_values,
+            'cohesion': cohesion_values,
+            'critical depth': z_crit_values
+        }
+    def calculate_rankine_kp_all_borings(self, boring_data: dict, gamma: float, phi: float, alpha: float = 0) -> dict:
+        """
+        Calculate K_p for all borings in the dataset
+
+        Parameters:
+        boring_data: Dictionary containing all boring information
+        gamma: unit weight of soil
+        phi: internal friction angle (in radians)
+        alpha: slope angle (in radians)
+
+        Returns:
+        Dictionary with boring_id as keys and Kp profiles as values
+        """
+        results = {}
+
+        for boring_id in boring_data.keys():
+            results[boring_id] = self.calculate_rankine_kp_profile(
+                boring_id, boring_data, gamma, phi, alpha
+            )
+
+        return results
+
+
+    #TODO: FIx this to actually do wedge analysis (good luck)
     def calculate_coulomb_ka(self, phi: float, delta: float,
                              beta: float = 0, alpha: float = 90) -> float:
         """Calculate Coulomb active earth pressure coefficient."""
@@ -1401,15 +1551,15 @@ class LateralEarthPressure:
         alpha_rad = np.radians(alpha)
 
         sin_phi_plus_delta = np.sin(phi_rad + delta_rad)
-        sin_phi_minus_beta = np.sin(phi_rad - beta_rad)
-        sin_alpha_plus_delta = np.sin(alpha_rad + delta_rad)
-        sin_alpha_minus_beta = np.sin(alpha_rad - beta_rad)
+        sin_phi_minus_alpha = np.sin(phi_rad - alpha_rad)
+        sin_beta_minus_delta = np.sin(beta_rad - delta_rad)
+        sin_alpha_plus_beta = np.sin(alpha_rad + beta_rad)
 
-        sqrt_term = np.sqrt(sin_phi_plus_delta * sin_phi_minus_beta /
-                            (sin_alpha_plus_delta * sin_alpha_minus_beta))
+        sqrt_term = np.sqrt((sin_phi_plus_delta * sin_phi_minus_alpha) /
+                            (sin_beta_minus_delta * sin_alpha_plus_beta))
 
-        numerator = np.sin(alpha_rad + phi_rad) ** 2
-        denominator = (np.sin(alpha_rad) ** 2 * sin_alpha_minus_beta *
+        numerator = np.sin(beta_rad + phi_rad) ** 2
+        denominator = (np.sin(beta_rad) ** 2 * sin_beta_minus_delta *
                        (1 + sqrt_term) ** 2)
 
         return numerator / denominator

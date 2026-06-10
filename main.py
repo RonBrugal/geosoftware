@@ -1,5 +1,3 @@
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
 import math
 import numpy as np
 from typing import List, Dict, Tuple, Optional
@@ -220,14 +218,8 @@ class MatFoundationSettlement:
         return total_settlement
 
 class DrainedModulus:
-    def __init__(self, root, borings_data=None):
-        self.root = root
-        self.root.title("Drained Modulus Stiffness Calculator")
-        self.root.geometry("800x700")
-
+    def __init__(self, borings_data=None):
         self.borings_data = borings_data
-        # Soil type to formula mapping
-        # Each soil type has a different formula for calculating E from N60
         self.soil_formulas = {
             1: {
                 'name': 'Sand (NC)',
@@ -261,43 +253,31 @@ class DrainedModulus:
             }
         }
 
-        # Create main frame
-        main_frame = ttk.Frame(root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+    def run(self):
+        print("\n" + "=" * 70)
+        print("Drained Modulus Stiffness Calculator")
+        print("=" * 70)
+        print("Calculates E (kPa) using soil-specific formulas with N60 as input")
 
-        # Configure grid weights
-        root.columnconfigure(0, weight=1)
-        root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=1)
+        while True:
+            print("\nOptions:")
+            print("  1. Calculate E")
+            print("  2. View Formulas")
+            print("  3. Proceed to Footing Settlement on Sand")
+            print("  4. Back to Main Menu")
+            choice = input("Enter choice: ").strip()
 
-        # Title
-        title = ttk.Label(main_frame, text="Drained Modulus Stiffness Calculator", font=('Arial', 16, 'bold'))
-        title.grid(row=0, column=0, columnspan=2, pady=10)
-
-        # Help text
-        help_text = "Calculates E (kPa) using soil-specific formulas with N60 as input"
-        ttk.Label(main_frame, text=help_text, font=('Arial', 9), foreground='gray').grid(row=1, column=0, columnspan=2,
-                                                                                         pady=5)
-
-        # Buttons frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=2, column=0, columnspan=2, pady=15)
-        ttk.Button(button_frame, text="Calculate E", command=self.calculate_modulus).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="View Formulas", command=self.show_formulas).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Back to Main Menu", command=self.back_to_main).pack(side=tk.LEFT, padx=5)
-
-        self.results_text = scrolledtext.ScrolledText(main_frame, width=80, height=20, wrap=tk.WORD)
-        self.results_text.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
-
-        # Configure text tags for formatting
-        self.results_text.tag_configure("header", font=('Courier', 10, 'bold'))
-        self.results_text.tag_configure("data", font=('Courier', 10))
-
-        main_frame.rowconfigure(3, weight=1)
-
-    def back_to_main(self):
-        self.root.destroy()
-        main_menu()
+            if choice == '1':
+                self.calculate_modulus()
+            elif choice == '2':
+                self.show_formulas()
+            elif choice == '3':
+                FootingSettlementSand(self.borings_data).run()
+                return
+            elif choice == '4':
+                return
+            else:
+                print("Invalid choice")
 
     def calculate_e_from_formula(self, soil_type, n60):
         """
@@ -336,271 +316,190 @@ class DrainedModulus:
 
     def show_formulas(self):
         """Display the formulas used for each soil type"""
-        info_text = "Formulas for Calculating E (kPa) from N60:\n\n"
-        info_text += "=" * 70 + "\n"
-
+        print("\nFormulas for Calculating E (kPa) from N60:")
+        print("=" * 70)
         for soil_type, data in sorted(self.soil_formulas.items()):
-            info_text += f"\nSoil Type {soil_type}: {data['name']}\n"
-            info_text += f"Formula: {data['formula']}\n"
-            info_text += f"Description: {data['description']}\n"
-            info_text += "-" * 70 + "\n"
-
-        messagebox.showinfo("Soil Type Formulas", info_text)
+            print(f"\nSoil Type {soil_type}: {data['name']}")
+            print(f"Formula: {data['formula']}")
+            print(f"Description: {data['description']}")
+            print("-" * 70)
 
     def calculate_modulus(self):
         if not self.borings_data:
-            messagebox.showerror("Error", "Please add boring data with soil types first")
+            print("Error: Please add boring data with soil types first")
             return
-
-        self.results_text.delete(1.0, tk.END)
 
         for boring_id, data in self.borings_data.items():
             if 'n60_values' not in data:
-                self.results_text.insert(tk.END,
-                                         f"Error: No N60 values found for {boring_id}. Run N60 calculation first.\n",
-                                         "header")
+                print(f"Error: No N60 values found for {boring_id}. Run N60 calculation first.")
                 continue
-            self.results_text.insert(tk.END, f"\n{'=' * 85}\n", "header")
-            self.results_text.insert(tk.END, f"BORING: {boring_id}\n", "header")
-            self.results_text.insert(tk.END, f"{'=' * 85}\n", "header")
-
-            header = f"{'Depth (ft)':<12} {'Soil Type':<12} {'Soil Name':<25} {'N60':<12} {'E (kPa)':<12}\n"
-            self.results_text.insert(tk.END, header, "header")
-            self.results_text.insert(tk.END, "-" * 85 + "\n", "header")
+            print(f"\n{'=' * 85}")
+            print(f"BORING: {boring_id}")
+            print(f"{'=' * 85}")
+            print(f"{'Depth (ft)':<12} {'Soil Type':<12} {'Soil Name':<25} {'N60':<12} {'E (kPa)':<12}")
+            print("-" * 85)
 
             for depth, soil_type, n60 in zip(data['depths'], data['soil types'], data['n60_values']):
                 if soil_type in self.soil_formulas:
                     soil_name = self.soil_formulas[soil_type]['name']
                     E = self.calculate_e_from_formula(soil_type, n60) if n60 is not None else None
 
-                    # store E back into borings_data
                     if 'E' not in data:
                         data['E'] = []
-
                     data['E'].append(E)
 
                     if E is not None:
-                        line = f"{depth:<12.1f} {soil_type:<12} {soil_name:<25} {n60:<12.2f} {E:<12.2f}\n"
+                        print(f"{depth:<12.1f} {soil_type:<12} {soil_name:<25} {n60:<12.2f} {E:<12.2f}")
                     else:
-                        line = f"{depth:<12.1f} {soil_type or 'N/A':<12} {soil_name:<25} {'N/A':<12} {'N/A':<12}\n"
-
-                    self.results_text.insert(tk.END, line, "data")
+                        print(f"{depth:<12.1f} {soil_type or 'N/A':<12} {soil_name:<25} {'N/A':<12} {'N/A':<12}")
                 else:
-                    line = f"{depth:<12.1f} {soil_type:<12} {'Unknown':<25} {n60:<12.2f} {'N/A':<12}\n"
-                    self.results_text.insert(tk.END, line, "data")
-            self.results_text.insert(tk.END, "\n")
+                    print(f"{depth:<12.1f} {soil_type:<12} {'Unknown':<25} {n60:<12.2f} {'N/A':<12}")
+            print()
 
-        # Add summary
-        self.results_text.insert(tk.END, f"\n{'=' * 85}\n", "header")
-        self.results_text.insert(tk.END, f"CALCULATION NOTES:\n", "header")
-        self.results_text.insert(tk.END, f"{'=' * 85}\n", "header")
-        self.results_text.insert(tk.END, f"Each soil type uses a different formula to calculate E from N60\n", "data")
-        self.results_text.insert(tk.END, f"Click 'View Formulas' button to see the formulas for each soil type\n",
-                                 "data")
+        print(f"\n{'=' * 85}")
+        print("CALCULATION NOTES:")
+        print(f"{'=' * 85}")
+        print("Each soil type uses a different formula to calculate E from N60")
+        print("Select 'View Formulas' to see the formulas for each soil type")
         mat_calcs = MatFoundationSettlement(width=5, length=5, depth=2, borings_data=self.borings_data)
         for boring_id in self.borings_data.keys():
             print(mat_calcs.calculate_settlement(boring_id=boring_id))
 
 class N60:
-    def __init__(self, root, borings_data=None):
-        self.root = root
-        self.root.title("N60 and N160 Calculator")
-        self.root.geometry("900x800")
-
+    def __init__(self, borings_data=None):
         self.borings_data = borings_data
 
-        # Create main frame
-        main_frame = ttk.Frame(root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+    def run(self):
+        print("\n" + "=" * 70)
+        print("N60 and N160 Calculator")
+        print("=" * 70)
 
-        # Configure grid weights
-        root.columnconfigure(0, weight=1)
-        root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=1)
+        while True:
+            print("\nOptions:")
+            print("  1. Calculate N60 & N160")
+            print("  2. View Borehole Diameter Correction (CB) info")
+            print("  3. View Sampler Correction (CS) info")
+            print("  4. View Rod Length Correction (CR) info")
+            print("  5. Proceed to Drained Modulus")
+            print("  6. Proceed to Liquefaction Analysis")
+            print("  7. Back to Main Menu")
+            choice = input("Enter choice: ").strip()
 
-        # Title
-        title = ttk.Label(main_frame, text="N60 and N160 Calculator", font=('Arial', 16, 'bold'))
-        title.grid(row=0, column=0, columnspan=2, pady=10)
-
-        # Correction parameters section
-        params_label = ttk.Label(main_frame, text="Energy Correction", font=('Arial', 12, 'bold'))
-        params_label.grid(row=1, column=0, columnspan=2, pady=5)
-
-        # Hammer efficiency
-        ttk.Label(main_frame, text="Hammer Efficiency (decimal):").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.hammer_eff_var = tk.StringVar(value="0.80")
-        ttk.Entry(main_frame, textvariable=self.hammer_eff_var, width=10).grid(row=2, column=1, sticky=tk.W, pady=5)
-
-        # Help text
-        help_text = "Common values: Safety (0.45-0.60), Donut (0.70-0.80), Automatic (0.80-1.00)"
-        ttk.Label(main_frame, text=help_text, font=('Arial', 8), foreground='gray').grid(row=3, column=0, columnspan=2,
-                                                                                         pady=2)
-
-        # Separator
-        ttk.Separator(main_frame, orient='horizontal').grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=10)
-
-        # Equipment correction section
-        equipment_label = ttk.Label(main_frame, text="Equipment Corrections", font=('Arial', 12, 'bold'))
-        equipment_label.grid(row=5, column=0, columnspan=2, pady=5)
-
-        # Borehole diameter correction (CB)
-        ttk.Label(main_frame, text="Borehole Diameter Correction (CB):").grid(row=6, column=0, sticky=tk.W, pady=5)
-        self.borehole_corr_var = tk.StringVar(value="1.0")
-        borehole_frame = ttk.Frame(main_frame)
-        borehole_frame.grid(row=6, column=1, sticky=tk.W, pady=5)
-        ttk.Entry(borehole_frame, textvariable=self.borehole_corr_var, width=10).pack(side=tk.LEFT)
-        ttk.Button(borehole_frame, text="?", width=3, command=self.show_borehole_info).pack(side=tk.LEFT, padx=5)
-
-        # Sampling method correction (CS)
-        ttk.Label(main_frame, text="Sampler Correction (CS):").grid(row=7, column=0, sticky=tk.W, pady=5)
-        self.sampler_corr_var = tk.StringVar(value="1.0")
-        sampler_frame = ttk.Frame(main_frame)
-        sampler_frame.grid(row=7, column=1, sticky=tk.W, pady=5)
-        ttk.Entry(sampler_frame, textvariable=self.sampler_corr_var, width=10).pack(side=tk.LEFT)
-        ttk.Button(sampler_frame, text="?", width=3, command=self.show_sampler_info).pack(side=tk.LEFT, padx=5)
-
-        # Rod length correction (CR)
-        ttk.Label(main_frame, text="Rod Length Correction (CR):").grid(row=8, column=0, sticky=tk.W, pady=5)
-        self.rod_corr_var = tk.StringVar(value="1.0")
-        rod_frame = ttk.Frame(main_frame)
-        rod_frame.grid(row=8, column=1, sticky=tk.W, pady=5)
-        ttk.Entry(rod_frame, textvariable=self.rod_corr_var, width=10).pack(side=tk.LEFT)
-        ttk.Button(rod_frame, text="?", width=3, command=self.show_rod_info).pack(side=tk.LEFT, padx=5)
-
-        # Equipment correction section
-        equipment_label = ttk.Label(main_frame, text="Overburden Correction for N160", font=('Arial', 12, 'bold'))
-        equipment_label.grid(row=9, column=0, columnspan=2, pady=5)
-
-        # gwt input
-        ttk.Label(main_frame, text="Groundwater table in feet:").grid(row=10, column=0, sticky=tk.W, pady=5)
-        self.gwt_depth_var = tk.StringVar(value="2")
-        ttk.Entry(main_frame, textvariable=self.gwt_depth_var, width=10).grid(row=10, column=1, sticky=(tk.W), pady=5)
-
-        # Unit weight
-        ttk.Label(main_frame, text="Unit Weight of Soil (pcf):").grid(row=11, column=0, sticky=tk.W, pady=5)
-        self.unit_weight_var = tk.StringVar(value="120")
-        ttk.Entry(main_frame, textvariable=self.unit_weight_var, width=10).grid(row=11, column=1, sticky=tk.W, pady=5)
-
-        # Atmospheric pressure
-        ttk.Label(main_frame, text="Atmospheric Pressure (psf):").grid(row=12, column=0, sticky=tk.W, pady=5)
-        self.atm_pressure_var = tk.StringVar(value="2116")
-        ttk.Entry(main_frame, textvariable=self.atm_pressure_var, width=10).grid(row=12, column=1, sticky=tk.W, pady=5)
-
-        # Buttons frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=15, column=0, columnspan=2, pady=15)
-        ttk.Button(button_frame, text="Calculate N60 & N160", command=self.calculate_n60).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Proceed to Modulus", command=self.open_modulus).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Back to Main Menu", command=self.back_to_main).pack(side=tk.LEFT, padx=5)
-
-        self.results_text = scrolledtext.ScrolledText(main_frame, width=100, height=15, wrap=tk.WORD)
-        self.results_text.grid(row=16, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
-
-        # Configure text tags for formatting
-        self.results_text.tag_configure("header", font=('Courier', 9, 'bold'))
-        self.results_text.tag_configure("data", font=('Courier', 9))
-
-        main_frame.rowconfigure(16, weight=1)
-
-    def back_to_main(self):
-        self.root.destroy()
-        main_menu()
+            if choice == '1':
+                self.calculate_n60()
+            elif choice == '2':
+                self.show_borehole_info()
+            elif choice == '3':
+                self.show_sampler_info()
+            elif choice == '4':
+                self.show_rod_info()
+            elif choice == '5':
+                self.open_modulus()
+                return
+            elif choice == '6':
+                self.open_liquefaction()
+                return
+            elif choice == '7':
+                return
+            else:
+                print("Invalid choice")
 
     def show_borehole_info(self):
-        """Display information about borehole diameter correction factors"""
-        info = """Borehole Diameter Correction (CB):
+        print("""
+Borehole Diameter Correction (CB):
 
 Common values:
-• 65-115 mm (2.5-4.5 in): CB = 1.00
-• 150 mm (6 in): CB = 1.05
-• 200 mm (8 in): CB = 1.15
+  - 65-115 mm (2.5-4.5 in): CB = 1.00
+  - 150 mm (6 in): CB = 1.05
+  - 200 mm (8 in): CB = 1.15
 
-Standard is typically 1.00 for normal borehole sizes."""
-        messagebox.showinfo("Borehole Diameter Correction", info)
+Standard is typically 1.00 for normal borehole sizes.
+""")
 
     def show_sampler_info(self):
-        """Display information about sampler correction factors"""
-        info = """Sampler Correction (CS):
+        print("""
+Sampler Correction (CS):
 
 Common values:
-• Standard sampler: CS = 1.00
-• Sampler without liner: CS = 1.10 to 1.30
-• Sampler with liner: CS = 0.80 to 1.00
+  - Standard sampler: CS = 1.00
+  - Sampler without liner: CS = 1.10 to 1.30
+  - Sampler with liner: CS = 0.80 to 1.00
 
-Standard split-spoon sampler with liner is typically 1.00."""
-        messagebox.showinfo("Sampler Correction", info)
+Standard split-spoon sampler with liner is typically 1.00.
+""")
 
     def show_rod_info(self):
-        """Display information about rod length correction factors"""
-        info = """Rod Length Correction (CR):
+        print("""
+Rod Length Correction (CR):
 
 Common values based on rod length:
-• 3-4 m (10-13 ft): CR = 0.75
-• 4-6 m (13-20 ft): CR = 0.85
-• 6-10 m (20-33 ft): CR = 0.95
-• 10-30 m (33-98 ft): CR = 1.00
-• > 30 m (> 98 ft): CR = 1.00
+  - 3-4 m (10-13 ft): CR = 0.75
+  - 4-6 m (13-20 ft): CR = 0.85
+  - 6-10 m (20-33 ft): CR = 0.95
+  - 10-30 m (33-98 ft): CR = 1.00
+  - > 30 m (> 98 ft): CR = 1.00
 
-Standard is 1.00 for rods longer than 10 m."""
-        messagebox.showinfo("Rod Length Correction", info)
+Standard is 1.00 for rods longer than 10 m.
+""")
 
     def open_modulus(self):
         if not self.borings_data:
-            messagebox.showerror("Error", "Please calculate N60 values first")
+            print("Error: Please calculate N60 values first")
             return
+        DrainedModulus(self.borings_data).run()
 
-        self.root.destroy()
-        modulus_root = tk.Tk()
-        DrainedModulus(modulus_root, self.borings_data)
-        modulus_root.mainloop()
+    def open_liquefaction(self):
+        if not self.borings_data:
+            print("Error: Please calculate N60 values first")
+            return
+        Liquefaction(self.borings_data, magnitude=7.5,
+                     peak_acceleration_g=0.20, gwt_depth=5.0).run()
+
+    def _prompt_float(self, label, default):
+        value = input(f"{label} [{default}]: ").strip()
+        return float(value) if value else float(default)
 
     def calculate_n60(self):
         if not self.borings_data:
-            messagebox.showerror("Error", "Please add at least one boring")
+            print("Error: Please add at least one boring")
             return
 
         try:
-            hammer_eff = float(self.hammer_eff_var.get())
-            unit_weight = float(self.unit_weight_var.get())
-            atm_pressure = float(self.atm_pressure_var.get())
-            borehole_corr = float(self.borehole_corr_var.get())
-            sampler_corr = float(self.sampler_corr_var.get())
-            rod_corr = float(self.rod_corr_var.get())
-            gwt_depth = float(self.gwt_depth_var.get())
+            print("\nEnter correction parameters (press Enter to accept default):")
+            print("Hammer Efficiency common values: Safety (0.45-0.60), Donut (0.70-0.80), Automatic (0.80-1.00)")
+            hammer_eff = self._prompt_float("Hammer Efficiency (decimal)", "0.80")
+            borehole_corr = self._prompt_float("Borehole Diameter Correction (CB)", "1.0")
+            sampler_corr = self._prompt_float("Sampler Correction (CS)", "1.0")
+            rod_corr = self._prompt_float("Rod Length Correction (CR)", "1.0")
+            gwt_depth = self._prompt_float("Groundwater table in feet", "2")
+            unit_weight = self._prompt_float("Unit Weight of Soil (pcf)", "120")
+            atm_pressure = self._prompt_float("Atmospheric Pressure (psf)", "2116")
 
             if hammer_eff <= 0 or hammer_eff > 1:
-                messagebox.showerror("Error", "Hammer efficiency must be between 0 and 1")
+                print("Error: Hammer efficiency must be between 0 and 1")
                 return
-
             if unit_weight <= 0:
-                messagebox.showerror("Error", "Unit weight must be greater than 0")
+                print("Error: Unit weight must be greater than 0")
                 return
-
             if atm_pressure <= 0:
-                messagebox.showerror("Error", "Atmospheric pressure must be greater than 0")
+                print("Error: Atmospheric pressure must be greater than 0")
                 return
-
-            self.results_text.delete(1.0, tk.END)
 
             for boring_id, data in self.borings_data.items():
-                self.results_text.insert(tk.END, f"\n{'=' * 110}\n", "header")
-                self.results_text.insert(tk.END, f"BORING: {boring_id}\n", "header")
-                self.results_text.insert(tk.END, f"{'=' * 110}\n", "header")
-
-                header = f"{'Depth':<8} {'N-fld':<8} {'σ\'v':<10} {'ER':<6} {'CB':<6} {'CS':<6} {'CR':<6} {'CN':<6} {'N60':<10} {'N160':<10}\n"
-                self.results_text.insert(tk.END, header, "header")
-                self.results_text.insert(tk.END, "-" * 110 + "\n", "header")
+                print(f"\n{'=' * 110}")
+                print(f"BORING: {boring_id}")
+                print(f"{'=' * 110}")
+                header = f"{'Depth':<8} {'N-fld':<8} {chr(963)+chr(39)+'v':<10} {'ER':<6} {'CB':<6} {'CS':<6} {'CR':<6} {'CN':<6} {'N60':<10} {'N160':<10}"
+                print(header)
+                print("-" * 110)
 
                 for depth, n_field in zip(data['depths'], data['n_values']):
-                    # Calculate effective overburden pressure
                     if gwt_depth >= depth:
                         eff_overburden = unit_weight * depth
                     else:
-                        eff_overburden = (unit_weight * gwt_depth) + ((unit_weight-62.4) * (depth - gwt_depth))
-                    # Energy ratio
+                        eff_overburden = (unit_weight * gwt_depth) + ((unit_weight - 62.4) * (depth - gwt_depth))
                     ER = hammer_eff / 0.6
 
-                    # Calculate N60 with all equipment corrections
                     n60 = convert_spt_to_n60(
                         n_field=n_field,
                         hammer_efficiency=hammer_eff,
@@ -609,7 +508,6 @@ Standard is 1.00 for rods longer than 10 m."""
                         rod_length_correction=rod_corr
                     )
 
-                    # Calculate N160 with overburden correction
                     n160 = convert_spt_to_n160(
                         n_field=n_field,
                         hammer_efficiency=hammer_eff,
@@ -620,153 +518,124 @@ Standard is 1.00 for rods longer than 10 m."""
                         rod_length_correction=rod_corr
                     )
 
-                    # Store N60 and N160 values back into borings_data
                     if 'n60_values' not in data:
                         data['n60_values'] = []
                     if 'n160_values' not in data:
                         data['n160_values'] = []
-
                     data['n60_values'].append(n60)
                     data['n160_values'].append(n160)
 
                     CN = (atm_pressure / eff_overburden) ** 0.5
 
-                    line = f"{depth:<8.1f} {n_field:<8} {eff_overburden:<10.2f} {ER:<6.3f} {borehole_corr:<6.2f} {sampler_corr:<6.2f} {rod_corr:<6.2f} {CN:<6.3f} {n60:<10.2f} {n160:<10.2f}\n"
-                    self.results_text.insert(tk.END, line, "data")
-                    self.results_text.insert(tk.END, "\n")
+                    print(f"{depth:<8.1f} {n_field:<8} {eff_overburden:<10.2f} {ER:<6.3f} {borehole_corr:<6.2f} {sampler_corr:<6.2f} {rod_corr:<6.2f} {CN:<6.3f} {n60:<10.2f} {n160:<10.2f}")
 
-            # Add summary
-            self.results_text.insert(tk.END, f"\n{'=' * 110}\n", "header")
-            self.results_text.insert(tk.END, "CORRECTION PARAMETERS USED:\n", "header")
-            self.results_text.insert(tk.END, f"{'=' * 110}\n", "header")
-            self.results_text.insert(tk.END, f"Energy Correction:\n", "data")
-            self.results_text.insert(tk.END, f"  Hammer Efficiency: {hammer_eff:.2f} ({hammer_eff * 100:.0f}%)\n",
-                                     "data")
-            self.results_text.insert(tk.END, f"  Energy Ratio (ER): {hammer_eff / 0.6:.3f}\n", "data")
-            self.results_text.insert(tk.END, f"\nEquipment Corrections:\n", "data")
-            self.results_text.insert(tk.END, f"  Borehole Diameter (CB): {borehole_corr:.2f}\n", "data")
-            self.results_text.insert(tk.END, f"  Sampler (CS): {sampler_corr:.2f}\n", "data")
-            self.results_text.insert(tk.END, f"  Rod Length (CR): {rod_corr:.2f}\n", "data")
-            self.results_text.insert(tk.END, f"\nOverburden Correction:\n", "data")
-            self.results_text.insert(tk.END, f"  Unit Weight: {unit_weight:.1f} kN/m³\n", "data")
-            self.results_text.insert(tk.END, f"  Atmospheric Pressure: {atm_pressure:.1f} kPa\n", "data")
-            self.results_text.insert(tk.END, f"\nFormulas:\n", "data")
-            self.results_text.insert(tk.END, f"  N60 = N-field × ER × CB × CS × CR\n", "data")
-            self.results_text.insert(tk.END, f"  CN = (Pa / σ'v)^0.5\n", "data")
-            self.results_text.insert(tk.END, f"  N160 = N60 × CN\n", "data")
-            self.results_text.insert(tk.END, f"  σ'v = Unit Weight × Depth\n", "data")
-            self.results_text.insert(tk.END, f"\nNote: Depth units in feet, σ'v in kPa\n", "data")
+            print(f"\n{'=' * 110}")
+            print("CORRECTION PARAMETERS USED:")
+            print(f"{'=' * 110}")
+            print("Energy Correction:")
+            print(f"  Hammer Efficiency: {hammer_eff:.2f} ({hammer_eff * 100:.0f}%)")
+            print(f"  Energy Ratio (ER): {hammer_eff / 0.6:.3f}")
+            print("\nEquipment Corrections:")
+            print(f"  Borehole Diameter (CB): {borehole_corr:.2f}")
+            print(f"  Sampler (CS): {sampler_corr:.2f}")
+            print(f"  Rod Length (CR): {rod_corr:.2f}")
+            print("\nOverburden Correction:")
+            print(f"  Unit Weight: {unit_weight:.1f} pcf")
+            print(f"  Atmospheric Pressure: {atm_pressure:.1f} psf")
+            print("\nFormulas:")
+            print("  N60 = N-field * ER * CB * CS * CR")
+            print("  CN = (Pa / sigma'v)^0.5")
+            print("  N160 = N60 * CN")
+            print("  sigma'v = Unit Weight * Depth")
+            print("\nNote: Depth units in feet, sigma'v in psf")
 
         except ValueError:
-            messagebox.showerror("Error", "Invalid input values")
+            print("Error: Invalid input values")
 
 class SPT:
 
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Stratum Information")
-        self.root.geometry("800x400")
-
+    def __init__(self):
         self.borings_data = {}
 
-        # Create main frame
-        main_frame = ttk.Frame(root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+    def run(self):
+        print("\n" + "=" * 70)
+        print("Boring Information (Stratum Info)")
+        print("=" * 70)
 
-        # Configure grid weights
-        root.columnconfigure(0, weight=1)
-        root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=1)
+        while True:
+            print("\nOptions:")
+            print("  1. Add Boring")
+            print("  2. View Soil Type Codes")
+            print("  3. Clear All")
+            print("  4. List Current Borings")
+            print("  5. Proceed to N60 Calculator")
+            print("  6. Back to Main Menu")
+            choice = input("Enter choice: ").strip()
 
-        # Title
-        title = ttk.Label(main_frame, text="Boring Information", font=('Arial', 16, 'bold'))
-        title.grid(row=0, column=0, columnspan=2, pady=10)
-
-        # Boring ID input
-        ttk.Label(main_frame, text="Boring ID:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.boring_id_var = tk.StringVar(value="B-1")
-        ttk.Entry(main_frame, textvariable=self.boring_id_var, width=20).grid(row=1, column=1, sticky=tk.W, pady=5)
-
-        # N-values input
-        ttk.Label(main_frame, text="N-values (comma-separated):").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.n_values_var = tk.StringVar(value="10,29,40,17")
-        ttk.Entry(main_frame, textvariable=self.n_values_var, width=40).grid(row=2, column=1, sticky=(tk.W, tk.E),
-                                                                             pady=5)
-        # Soil-type input
-        ttk.Label(main_frame, text="Soil type (comma-separated, See note):").grid(row=3, column=0, sticky=tk.W, pady=5)
-        self.soil_type_var = tk.StringVar(value="1,2,1,1")
-        ttk.Entry(main_frame, textvariable=self.soil_type_var, width=40).grid(row=3, column=1, sticky=(tk.W, tk.E),
-                                                                              pady=5)
-        # Depths input
-        ttk.Label(main_frame, text="Depths in feet (comma-separated):").grid(row=4, column=0, sticky=tk.W, pady=5)
-        self.depths_var = tk.StringVar(value="1,3,5,7")
-        ttk.Entry(main_frame, textvariable=self.depths_var, width=40).grid(row=4, column=1, sticky=(tk.W, tk.E), pady=5)
-
-        # Add boring button
-        ttk.Button(main_frame, text="Add Boring", command=self.add_boring).grid(row=6, column=0, columnspan=3, pady=10)
-
-        # Soil type note
-        ttk.Button(main_frame, text="Soil Type Note", command=self.soil_type_text_box).grid(row=3, column=2,
-                                                                                            columnspan=1, pady=10)
-
-        # Separator
-        ttk.Separator(main_frame, orient='horizontal').grid(row=7, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
-
-        # Buttons frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=10, column=0, columnspan=2, pady=15)
-
-        ttk.Button(button_frame, text="Clear All", command=self.clear_all).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Proceed to N60", command=self.open_n60).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Back to Main Menu", command=self.back_to_main).pack(side=tk.LEFT, padx=5)
-
-        main_frame.rowconfigure(11, weight=1)
+            if choice == '1':
+                self.add_boring()
+            elif choice == '2':
+                self.soil_type_text_box()
+            elif choice == '3':
+                self.clear_all()
+            elif choice == '4':
+                self.list_borings()
+            elif choice == '5':
+                self.open_n60()
+                return
+            elif choice == '6':
+                return
+            else:
+                print("Invalid choice")
 
     def open_n60(self):
         if not self.borings_data:
-            messagebox.showerror("Error", "Please add at least one boring before proceeding to N60 calculator")
+            print("Error: Please add at least one boring before proceeding to N60 calculator")
             return
+        N60(self.borings_data).run()
 
-        self.root.destroy()
-        n60_root = tk.Tk()
-        N60(n60_root, self.borings_data)
-        n60_root.mainloop()
+    def _prompt(self, label, default):
+        value = input(f"{label} [{default}]: ").strip()
+        return value if value else default
 
-    def back_to_main(self):
-        self.root.destroy()
-        main_menu()
+    def list_borings(self):
+        if not self.borings_data:
+            print("No borings stored.")
+            return
+        print("\nStored borings:")
+        for bid, data in self.borings_data.items():
+            print(f"  {bid}: depths={data['depths']}, N={data['n_values']}, soil_types={data['soil types']}")
 
     def add_boring(self):
-        boring_id = self.boring_id_var.get().strip()
-        n_values_str = self.n_values_var.get().strip()
-        depths_str = self.depths_var.get().strip()
-        soil_type_text = self.soil_type_var.get().strip()
-
-        try:
-            soil_type = [int(x.strip()) for x in soil_type_text.split(',')]
-            for value in soil_type:
-                if value < 1 or value > 6:
-                    messagebox.showerror("Error", "Soil type must be between 1 and 6")
-                    return
-        except ValueError:
-            messagebox.showerror("Error", "Invalid soil type value")
-            return
+        boring_id = self._prompt("Boring ID", "B-1")
+        n_values_str = self._prompt("N-values (comma-separated)", "10,29,40,17")
+        soil_type_text = self._prompt("Soil type (comma-separated, 1-6)", "1,2,1,1")
+        depths_str = self._prompt("Depths in feet (comma-separated)", "1,3,5,7")
 
         if not boring_id:
-            messagebox.showerror("Error", "Please enter a Boring ID")
+            print("Error: Please enter a Boring ID")
             return
 
         if not n_values_str or not depths_str:
-            messagebox.showerror("Error", "Please enter both N-values and depths")
+            print("Error: Please enter both N-values and depths")
+            return
+
+        try:
+            soil_types = [int(x.strip()) for x in soil_type_text.split(',')]
+            for value in soil_types:
+                if value < 1 or value > 6:
+                    print("Error: Soil type must be between 1 and 6")
+                    return
+        except ValueError:
+            print("Error: Invalid soil type value")
             return
 
         try:
             n_values = [int(x.strip()) for x in n_values_str.split(',')]
             depths = [float(x.strip()) for x in depths_str.split(',')]
-            soil_types = [int(x.strip()) for x in soil_type_text.split(',')]
 
             if len(n_values) != len(depths) or len(n_values) != len(soil_types):
-                messagebox.showerror("Error", "Number of values must match")
+                print("Error: Number of values must match")
                 return
 
             self.borings_data[boring_id] = {
@@ -775,94 +644,54 @@ class SPT:
                 'soil types': soil_types
             }
 
-            messagebox.showinfo("Success", f"Boring {boring_id} added with {len(n_values)} readings")
-
-            # Clear input fields
-            self.boring_id_var.set("")
-            self.n_values_var.set("")
-            self.depths_var.set("")
-            self.soil_type_var.set("")
+            print(f"Success: Boring {boring_id} added with {len(n_values)} readings")
 
         except ValueError:
-            messagebox.showerror("Error", "Invalid input. Please use numbers only, separated by commas")
+            print("Error: Invalid input. Please use numbers only, separated by commas")
 
     def clear_all(self):
         self.borings_data = {}
-        self.boring_id_var.set("")
-        self.n_values_var.set("")
-        self.depths_var.set("")
-        messagebox.showinfo("Cleared", "All data has been cleared")
+        print("All data has been cleared")
 
     def soil_type_text_box(self):
-        messagebox.showinfo("Soil Types",
-                            "Type the number for the corresponding soil type:\n1: Sand (NC)\n2:Sand (saturated)\n3:Sand (OC)\n4:Gravelly Sand\n5:Clayey Sand\n6:Silts, sandy silts or clayey silt")
+        print("\nSoil Types:")
+        print("  1: Sand (NC)")
+        print("  2: Sand (saturated)")
+        print("  3: Sand (OC)")
+        print("  4: Gravelly Sand")
+        print("  5: Clayey Sand")
+        print("  6: Silts, sandy silts or clayey silt")
 
 def main_menu():
-    """Create the main menu window with navigation buttons"""
-    root = tk.Tk()
-    root.title("SPT Calculator - Main Menu")
-    root.geometry("400x300")
+    """Display the terminal main menu and dispatch to calculators."""
+    while True:
+        print("\n" + "=" * 70)
+        print("SPT Calculator - Main Menu")
+        print("=" * 70)
+        print("\nSelect an option:")
+        print("  1. Subsurface Information (SPT)")
+        print("  2. N60 Calculator")
+        print("  3. Drained Modulus Stiffness Calculator")
+        print("  4. Footing Settlement on Sand")
+        print("  5. Liquefaction Analysis (Youd et al. 2001)")
+        print("  6. Exit")
+        choice = input("Enter choice: ").strip()
 
-    # Create main frame
-    main_frame = ttk.Frame(root, padding="20")
-    main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-
-    # Configure grid weights
-    root.columnconfigure(0, weight=1)
-    root.rowconfigure(0, weight=1)
-    main_frame.columnconfigure(0, weight=1)
-
-    # Title
-    title = ttk.Label(main_frame, text="SPT Calculator", font=('Arial', 20, 'bold'))
-    title.grid(row=0, column=0, pady=30)
-
-    # Subtitle
-    subtitle = ttk.Label(main_frame, text="Select an option to continue:", font=('Arial', 12))
-    subtitle.grid(row=1, column=0, pady=10)
-
-    # Button frame for centering
-    button_frame = ttk.Frame(main_frame)
-    button_frame.grid(row=2, column=0, pady=20)
-
-    # Subsurface Information button
-    def open_subsurface():
-        root.destroy()
-        spt_root = tk.Tk()
-        SPT(spt_root)
-        spt_root.mainloop()
-
-    subsurface_btn = ttk.Button(button_frame, text="Subsurface Information",
-                                command=open_subsurface, width=25)
-    subsurface_btn.pack(pady=10)
-
-    # N60 Calculator button
-    def open_n60():
-        root.destroy()
-        n60_root = tk.Tk()
-        N60(n60_root)
-        n60_root.mainloop()
-
-    n60_btn = ttk.Button(button_frame, text="N60",
-                         command=open_n60, width=25)
-    n60_btn.pack(pady=10)
-
-    # Drained Modulus Calculator button
-    def open_modulus():
-        root.destroy()
-        modulus_root = tk.Tk()
-        DrainedModulus(modulus_root)
-        modulus_root.mainloop()
-
-    modulus_btn = ttk.Button(button_frame, text="Drained Modulus Stiffness Calculator",
-                             command=open_modulus, width=25)
-    modulus_btn.pack(pady=10)
-
-    # Exit button
-    exit_btn = ttk.Button(button_frame, text="Exit",
-                          command=root.destroy, width=25)
-    exit_btn.pack(pady=10)
-
-    root.mainloop()
+        if choice == '1':
+            SPT().run()
+        elif choice == '2':
+            N60().run()
+        elif choice == '3':
+            DrainedModulus().run()
+        elif choice == '4':
+            FootingSettlementSand({}).run()
+        elif choice == '5':
+            Liquefaction({}, magnitude=7.5, peak_acceleration_g=0.20, gwt_depth=5.0).run()
+        elif choice == '6':
+            print("Exiting...")
+            return
+        else:
+            print("Invalid choice")
 
 class TerzaghiBearingCapacity:
     """
@@ -1300,6 +1129,472 @@ class Stratums_and_SoilProps:
                 f"γ={self.unit_weight:.1f} pcf, φ={self.phi:.1f}°, "
                 f"c={self.cohesion:.3f} ksf)")
 
+class FootingSettlementSand:
+    """
+    Settlement of shallow spread and continuous footings bearing on sand.
+
+    Two methods are evaluated per the 1996 revised Peck & Terzaghi practice
+    manual:
+      - Schmertmann (1978, revised 1996): strain-influence factor method
+        with depth correction C1 and creep correction C2.
+      - Burland and Burbridge (1985, revised 1996): empirical compressibility
+        index Ic correlated to mean N60 in the depth of influence, with shape
+        factor f_s, layer-thickness factor f_l, and time correction f_t.
+
+    Soil data is consumed from the borings_data dict produced by SPT, N60,
+    and DrainedModulus. Layer unit weights are derived through
+    Stratums_and_SoilProps from each boring's N-values and soil types.
+
+    Each method runs for every boring; worst/best/average borings are
+    identified and differential settlement is reported as (max - min) and
+    (max - avg). Settlement is reported at every user-specified time, with
+    creep extension via Schmertmann's C2 and Burland-Burbridge's f_t.
+
+    Footing shapes: square, rectangular, strip/continuous, circular.
+    Load is supplied as gross applied pressure q (psf); effective overburden
+    is subtracted internally using unit weights and the groundwater table.
+    For Burland-Burbridge OC sand, supply the preconsolidation pressure
+    sigma_p (psf); otherwise the sand is treated as NC.
+
+    Can be invoked programmatically (full parameters via __init__) or
+    interactively via run(), which prompts for footing geometry and load.
+    """
+
+    # Burland-Burbridge static-loading time-correction constants
+    BB_R3 = 0.3
+    BB_RT = 0.2
+
+    # Unit conversions
+    KPA_PER_PSF = 0.04788
+    M_PER_FT = 0.3048
+
+    def __init__(self,
+                 borings_data: dict,
+                 footing_width: Optional[float] = None,
+                 footing_length: Optional[float] = None,
+                 footing_shape: str = 'rectangular',
+                 footing_depth: float = 0.0,
+                 gross_pressure: float = 0.0,
+                 gwt_depth: float = float('inf'),
+                 sigma_p_psf: Optional[float] = None,
+                 times_years: Tuple[float, ...] = (0.1, 1.0, 10.0, 50.0)):
+        self.borings_data = borings_data
+        self.B = footing_width
+        self.L = footing_length if footing_length is not None else footing_width
+        self.shape = (footing_shape or 'rectangular').lower()
+        self.D = footing_depth
+        self.q = gross_pressure
+        self.gwt_depth = gwt_depth
+        self.sigma_p_psf = sigma_p_psf
+        self.times_years = tuple(times_years)
+        self._normalize_shape()
+
+        self.stratums = {}
+        for bid, data in borings_data.items():
+            self.stratums[bid] = self._build_stratums(data)
+
+    def _normalize_shape(self):
+        if self.B is None:
+            return
+        if self.shape in ('square', 'circular'):
+            self.L = self.B
+        elif self.shape in ('strip', 'continuous'):
+            self.L = 1e6 * self.B   # plane-strain proxy: L/B >> 10
+
+    def _build_stratums(self, data):
+        depths = data.get('depths', [])
+        n_for_corr = data.get('n_values') or data.get('n60_values') or []
+        soil_types = data.get('soil types') or data.get('soil_types') or []
+        if not (depths and n_for_corr and soil_types):
+            return []
+        layers = []
+        for i, depth in enumerate(depths):
+            thickness = depth if i == 0 else depths[i] - depths[i - 1]
+            layers.append(Stratums_and_SoilProps(
+                thickness=thickness,
+                n_value=n_for_corr[i],
+                soil_type=soil_types[i]
+            ))
+        return layers
+
+    def _effective_overburden(self, boring_id: str, depth_ft: float) -> float:
+        """Effective vertical stress (psf) at the given depth below ground surface."""
+        if depth_ft <= 0:
+            return 0.0
+        layers = self.stratums.get(boring_id, [])
+        if not layers:
+            return 0.0
+        sigma = 0.0
+        cum = 0.0
+        for layer in layers:
+            top = cum
+            bot = cum + layer.thickness
+            slice_top = top
+            slice_bot = min(depth_ft, bot)
+            if slice_bot <= slice_top:
+                break
+            if slice_bot <= self.gwt_depth:
+                sigma += layer.unit_weight * (slice_bot - slice_top)
+            elif slice_top >= self.gwt_depth:
+                sigma += (layer.unit_weight - 62.4) * (slice_bot - slice_top)
+            else:
+                above = self.gwt_depth - slice_top
+                below = slice_bot - self.gwt_depth
+                sigma += layer.unit_weight * above + (layer.unit_weight - 62.4) * below
+            cum = bot
+            if cum >= depth_ft:
+                break
+        return sigma
+
+    def _schmertmann_iz_profile(self) -> Tuple[float, float, float]:
+        """Return (Iz_top, z_peak_ft, z_zero_ft) interpolated by L/B."""
+        ratio = self.L / self.B if self.B else 1.0
+        if ratio < 1.0:
+            ratio = 1.0
+        # Schmertmann's linear interpolation: L/B=1 (axisym) -> L/B>=10 (plane strain)
+        Iz_top = min(0.2, 0.1 + 0.0111 * (ratio - 1.0))
+        z_peak = min(self.B, self.B * (0.5 + 0.0555 * (ratio - 1.0)))
+        z_zero = min(4.0 * self.B, self.B * (2.0 + 0.222 * (ratio - 1.0)))
+        return Iz_top, z_peak, z_zero
+
+    def calculate_schmertmann(self, boring_id: str) -> dict:
+        """Schmertmann settlement for one boring. Settlement reported in inches per time."""
+        if boring_id not in self.borings_data:
+            raise ValueError(f"Boring '{boring_id}' not found in borings_data")
+        data = self.borings_data[boring_id]
+        E_vals = data.get('E')
+        if not E_vals:
+            raise ValueError(f"Boring '{boring_id}' has no E values; run DrainedModulus first.")
+        depths = data['depths']
+
+        sigma_at_D = self._effective_overburden(boring_id, self.D)
+        q_net = self.q - sigma_at_D
+
+        Iz_top, z_peak, z_zero = self._schmertmann_iz_profile()
+
+        if q_net <= 0:
+            return {
+                'boring_id': boring_id,
+                'q_gross_psf': self.q,
+                'sigma_v_at_D_psf': sigma_at_D,
+                'q_net_psf': q_net,
+                'note': 'q_net <= 0; no settlement.',
+                'settlement_by_time_in': {t: 0.0 for t in self.times_years},
+            }
+
+        sigma_at_zpeak = self._effective_overburden(boring_id, self.D + z_peak)
+        Iz_p = 0.5 + 0.1 * math.sqrt(q_net / max(sigma_at_zpeak, 1e-3))
+
+        n = len(depths)
+        bounds = []
+        for i in range(n):
+            top = 0.0 if i == 0 else 0.5 * (depths[i - 1] + depths[i])
+            bot = (depths[i] + (depths[i] - top)) if i == n - 1 else 0.5 * (depths[i] + depths[i + 1])
+            bounds.append((top, bot))
+
+        sum_term = 0.0
+        layer_breakdown = []
+        for i in range(n):
+            layer_top, layer_bot = bounds[i]
+            z_t = layer_top - self.D
+            z_b = layer_bot - self.D
+            if z_b <= 0:
+                continue
+            if z_t >= z_zero:
+                break
+            z_t = max(0.0, z_t)
+            z_b = min(z_zero, z_b)
+            if z_b <= z_t:
+                continue
+            z_mid = 0.5 * (z_t + z_b)
+            dz = z_b - z_t
+            if z_mid <= z_peak:
+                Iz = Iz_top + (Iz_p - Iz_top) * (z_mid / z_peak if z_peak > 0 else 0.0)
+            else:
+                Iz = Iz_p * (1.0 - (z_mid - z_peak) / (z_zero - z_peak)) if z_zero > z_peak else 0.0
+            E_ksf = E_vals[i]
+            if E_ksf is None or E_ksf <= 0:
+                continue
+            E_psf = E_ksf * 1000.0
+            contribution = Iz * dz / E_psf
+            sum_term += contribution
+            layer_breakdown.append({
+                'z_below_footing_ft': z_mid,
+                'dz_ft': dz,
+                'Iz': Iz,
+                'E_ksf': E_ksf,
+                'contribution': contribution,
+            })
+
+        C1 = max(0.5, 1.0 - 0.5 * sigma_at_D / q_net)
+        settlement_by_time_in = {}
+        for t in self.times_years:
+            C2 = 1.0 + 0.2 * math.log10(t / 0.1)
+            settlement_by_time_in[t] = C1 * C2 * q_net * sum_term * 12.0  # ft -> in
+
+        return {
+            'boring_id': boring_id,
+            'q_gross_psf': self.q,
+            'sigma_v_at_D_psf': sigma_at_D,
+            'q_net_psf': q_net,
+            'Iz_top': Iz_top,
+            'Iz_peak': Iz_p,
+            'z_peak_ft': z_peak,
+            'z_zero_ft': z_zero,
+            'C1': C1,
+            'sum_Iz_dz_over_E': sum_term,
+            'layer_breakdown': layer_breakdown,
+            'settlement_by_time_in': settlement_by_time_in,
+        }
+
+    def calculate_burland_burbridge(self, boring_id: str) -> dict:
+        """Burland-Burbridge settlement for one boring. Settlement reported in inches per time."""
+        if boring_id not in self.borings_data:
+            raise ValueError(f"Boring '{boring_id}' not found in borings_data")
+        data = self.borings_data[boring_id]
+        n60 = data.get('n60_values')
+        if not n60:
+            raise ValueError(f"Boring '{boring_id}' has no n60_values; run N60 first.")
+        depths = data['depths']
+
+        sigma_at_D = self._effective_overburden(boring_id, self.D)
+        q_net_psf = self.q - sigma_at_D
+        if q_net_psf <= 0:
+            return {
+                'boring_id': boring_id,
+                'q_gross_psf': self.q,
+                'sigma_v_at_D_psf': sigma_at_D,
+                'q_net_psf': q_net_psf,
+                'note': 'q_net <= 0; no settlement.',
+                'settlement_by_time_in': {t: 0.0 for t in self.times_years},
+            }
+
+        q_net_kpa = q_net_psf * self.KPA_PER_PSF
+        B_m = self.B * self.M_PER_FT
+        zI_m = B_m ** 0.75
+        zI_ft = zI_m / self.M_PER_FT
+
+        samples = [n for d, n in zip(depths, n60) if self.D < d <= self.D + zI_ft]
+        if not samples:
+            below = [(d, n) for d, n in zip(depths, n60) if d >= self.D]
+            if not below:
+                raise ValueError(
+                    f"No N60 data below footing depth {self.D} ft in boring '{boring_id}'"
+                )
+            samples = [below[0][1]]
+        N_avg = sum(samples) / len(samples)
+
+        sigma_p_kpa = (self.sigma_p_psf * self.KPA_PER_PSF) if self.sigma_p_psf is not None else None
+
+        Ic_NC = 1.71 / (N_avg ** 1.4)
+        Ic_OC = 0.57 / (N_avg ** 1.4)
+
+        if sigma_p_kpa is None:
+            Ic_reported = Ic_NC
+            condition = 'NC'
+            oc_split = False
+        elif q_net_kpa <= sigma_p_kpa:
+            Ic_reported = Ic_OC
+            condition = 'OC, q_net <= sigma_p'
+            oc_split = False
+        else:
+            Ic_reported = None
+            condition = 'OC, q_net > sigma_p (split)'
+            oc_split = True
+
+        ratio = (self.L / self.B) if self.B else 1.0
+        if ratio < 1.0:
+            ratio = 1.0
+        f_s = (1.25 * ratio / (ratio + 0.25)) ** 2
+
+        depth_to_bottom = depths[-1] - self.D
+        Hs_ft = max(0.0, min(depth_to_bottom, zI_ft))
+        if Hs_ft >= zI_ft - 1e-9:
+            f_l = 1.0
+        else:
+            f_l = (Hs_ft / zI_ft) * (2.0 - Hs_ft / zI_ft)
+
+        settlement_by_time_in = {}
+        for t in self.times_years:
+            f_t = 1.0 + self.BB_R3 if t <= 3.0 else 1.0 + self.BB_R3 + self.BB_RT * math.log10(t / 3.0)
+            if oc_split:
+                S_mm = ((q_net_kpa - (2.0 / 3.0) * sigma_p_kpa) * Ic_NC
+                        + (2.0 / 3.0) * sigma_p_kpa * Ic_OC) * (B_m ** 0.7) * f_s * f_l * f_t
+            else:
+                S_mm = q_net_kpa * (B_m ** 0.7) * Ic_reported * f_s * f_l * f_t
+            settlement_by_time_in[t] = S_mm / 25.4
+
+        return {
+            'boring_id': boring_id,
+            'q_gross_psf': self.q,
+            'sigma_v_at_D_psf': sigma_at_D,
+            'q_net_psf': q_net_psf,
+            'q_net_kpa': q_net_kpa,
+            'B_m': B_m,
+            'zI_m': zI_m,
+            'zI_ft': zI_ft,
+            'N_avg': N_avg,
+            'Ic': Ic_reported,
+            'Ic_NC': Ic_NC,
+            'Ic_OC': Ic_OC,
+            'condition': condition,
+            'f_s': f_s,
+            'f_l': f_l,
+            'Hs_ft': Hs_ft,
+            'settlement_by_time_in': settlement_by_time_in,
+        }
+
+    def calculate_all(self) -> dict:
+        out = {'schmertmann': {}, 'burland_burbridge': {}}
+        for bid in self.borings_data:
+            try:
+                out['schmertmann'][bid] = self.calculate_schmertmann(bid)
+            except (ValueError, KeyError, TypeError) as e:
+                out['schmertmann'][bid] = {'error': str(e)}
+            try:
+                out['burland_burbridge'][bid] = self.calculate_burland_burbridge(bid)
+            except (ValueError, KeyError, TypeError) as e:
+                out['burland_burbridge'][bid] = {'error': str(e)}
+        return out
+
+    def calculate_differential(self) -> dict:
+        all_results = self.calculate_all()
+        differential = {}
+        for method in ('schmertmann', 'burland_burbridge'):
+            per_time = {}
+            method_results = all_results[method]
+            for t in self.times_years:
+                settlements = {
+                    bid: r['settlement_by_time_in'][t]
+                    for bid, r in method_results.items()
+                    if isinstance(r, dict) and 'settlement_by_time_in' in r
+                }
+                if not settlements:
+                    continue
+                worst_bid = max(settlements, key=settlements.get)
+                best_bid = min(settlements, key=settlements.get)
+                avg = sum(settlements.values()) / len(settlements)
+                per_time[t] = {
+                    'settlements_in': settlements,
+                    'worst_boring': worst_bid,
+                    'best_boring': best_bid,
+                    'worst_settlement_in': settlements[worst_bid],
+                    'best_settlement_in': settlements[best_bid],
+                    'avg_settlement_in': avg,
+                    'differential_max_minus_min_in': settlements[worst_bid] - settlements[best_bid],
+                    'differential_max_minus_avg_in': settlements[worst_bid] - avg,
+                }
+            differential[method] = per_time
+        return {'per_boring': all_results, 'differential': differential}
+
+    def print_report(self) -> dict:
+        results = self.calculate_differential()
+        print("\n" + "=" * 92)
+        print("FOOTING SETTLEMENT ON SAND")
+        print("=" * 92)
+        print(f"  Footing shape       : {self.shape}")
+        print(f"  B = {self.B:.2f} ft, L = {self.L:.2f} ft, D = {self.D:.2f} ft")
+        print(f"  Gross pressure q    : {self.q:.1f} psf")
+        gwt_str = 'below influence zone' if self.gwt_depth == float('inf') else f"{self.gwt_depth:.1f} ft"
+        print(f"  Groundwater table   : {gwt_str}")
+        if self.sigma_p_psf is not None:
+            print(f"  Preconsolidation    : sigma_p = {self.sigma_p_psf:.1f} psf (OC sand)")
+        else:
+            print(f"  Preconsolidation    : NC sand assumed")
+        print(f"  Evaluation times    : {self.times_years} years")
+
+        method_titles = {
+            'schmertmann': "SCHMERTMANN (1978, revised 1996)",
+            'burland_burbridge': "BURLAND-BURBRIDGE (1985, revised 1996)",
+        }
+        for method in ('schmertmann', 'burland_burbridge'):
+            print("\n" + "-" * 92)
+            print(method_titles[method])
+            print("-" * 92)
+            print(f"  {'Boring':<10}", end='')
+            for t in self.times_years:
+                print(f"  {('S('+str(t)+'yr) [in]'):<14}", end='')
+            print()
+            for bid, r in results['per_boring'][method].items():
+                if 'error' in r:
+                    print(f"  {bid:<10}  ERROR: {r['error']}")
+                    continue
+                print(f"  {bid:<10}", end='')
+                for t in self.times_years:
+                    val = r['settlement_by_time_in'].get(t, float('nan'))
+                    print(f"  {val:<14.4f}", end='')
+                print()
+
+            diff = results['differential'].get(method, {})
+            if diff:
+                print(f"\n  Differential settlement across borings:")
+                for t in self.times_years:
+                    d = diff.get(t)
+                    if not d:
+                        continue
+                    print(f"    t = {t} yr:")
+                    print(f"      worst boring  : {d['worst_boring']:<6}  S = {d['worst_settlement_in']:.4f} in")
+                    print(f"      best  boring  : {d['best_boring']:<6}  S = {d['best_settlement_in']:.4f} in")
+                    print(f"      average across borings : {d['avg_settlement_in']:.4f} in")
+                    print(f"      diff (max - min)       : {d['differential_max_minus_min_in']:.4f} in")
+                    print(f"      diff (max - avg)       : {d['differential_max_minus_avg_in']:.4f} in")
+        return results
+
+    def run(self):
+        """Interactive terminal flow. Expects borings_data already populated by SPT/N60/DrainedModulus."""
+        if not self.borings_data:
+            print("Error: no borings data. Run SPT -> N60 -> DrainedModulus first.")
+            return
+        missing = []
+        for bid, data in self.borings_data.items():
+            if not data.get('n60_values'):
+                missing.append(f"{bid}: missing n60_values (run N60)")
+            if not data.get('E'):
+                missing.append(f"{bid}: missing E (run DrainedModulus)")
+        if missing:
+            print("Error: borings missing required data:")
+            for m in missing:
+                print(f"  {m}")
+            return
+
+        print("\n" + "=" * 70)
+        print("Footing Settlement on Sand")
+        print("=" * 70)
+        try:
+            shape_in = (input("Footing shape (1=square, 2=rectangular, 3=strip, 4=circular) [1]: ").strip()
+                        or '1')
+            shape_map = {'1': 'square', '2': 'rectangular', '3': 'strip', '4': 'circular'}
+            if shape_in not in shape_map:
+                print("Invalid shape.")
+                return
+            self.shape = shape_map[shape_in]
+
+            self.B = float(input("Footing width B (ft) [5]: ").strip() or '5')
+            if self.shape == 'rectangular':
+                self.L = float(input(f"Footing length L (ft) [{self.B}]: ").strip() or str(self.B))
+            else:
+                self._normalize_shape()
+
+            self.D = float(input("Footing depth D below ground (ft) [2]: ").strip() or '2')
+            self.q = float(input("Gross applied pressure q (psf) [3000]: ").strip() or '3000')
+
+            gwt_in = input("Groundwater table depth (ft) [blank for none]: ").strip()
+            self.gwt_depth = float(gwt_in) if gwt_in else float('inf')
+
+            oc_in = (input("Sand condition (n=NC, o=OC) [n]: ").strip().lower() or 'n')
+            if oc_in.startswith('o'):
+                self.sigma_p_psf = float(input("Preconsolidation pressure sigma_p (psf): ").strip())
+            else:
+                self.sigma_p_psf = None
+
+            times_in = input("Evaluation times in years (comma-separated) [0.1,1,10,50]: ").strip() or "0.1,1,10,50"
+            self.times_years = tuple(float(x.strip()) for x in times_in.split(','))
+        except ValueError as e:
+            print(f"Error: invalid input ({e})")
+            return
+
+        self.print_report()
+
 class LineLoad:
     def __init__(self, magnitude: float, distance: float):
         """
@@ -1385,7 +1680,6 @@ class LateralEarthPressure:
 
         boring = boring_data[boring_id]
         depths = boring['depths']
-        #TODO: This must come from the soil prop. list not the boring
         cohesion_values = boring['cohesion']
 
         ka_values = []
@@ -1473,7 +1767,6 @@ class LateralEarthPressure:
 
         boring = boring_data[boring_id]
         depths = boring['depths']
-        #TODO: This must come from the soil prop. list not the boring
         cohesion_values = boring['cohesion']
 
         ka_values = []
@@ -1498,8 +1791,7 @@ class LateralEarthPressure:
                 4 * (c / gamma_z) ** 2 * cos_phi ** 2 +
                 8 * (c / gamma_z) * cos_alpha ** 2 * sin_phi * cos_phi
             )
-            #TODO: Just get the Ka from the other function?
-            # Main calculation: compute Ka first, then Kp = 1/Ka
+
             K_a = (1 / cos_phi ** 2) * (
                     2 * cos_alpha ** 2 + 2 * (c / gamma_z) * cos_phi * sin_phi -
                     sqrt_term - 1
@@ -1541,50 +1833,292 @@ class LateralEarthPressure:
         return results
 
 
-    #TODO: FIx this to actually do wedge analysis (good luck)
-    def calculate_coulomb_ka(self, phi: float, delta: float,
-                             beta: float = 0, alpha: float = 90) -> float:
-        """Calculate Coulomb active earth pressure coefficient."""
-        phi_rad = np.radians(phi)
-        delta_rad = np.radians(delta)
-        beta_rad = np.radians(beta)
-        alpha_rad = np.radians(alpha)
+    @staticmethod
+    def _interpolate_critical_wedge(trials: List[dict], force_key: str,
+                                    kind: str) -> Tuple[float, float, dict, List[str]]:
+        """
+        Find the critical trial wedge by quadratic interpolation across trials.
 
-        sin_phi_plus_delta = np.sin(phi_rad + delta_rad)
-        sin_phi_minus_alpha = np.sin(phi_rad - alpha_rad)
-        sin_beta_minus_delta = np.sin(beta_rad - delta_rad)
-        sin_alpha_plus_beta = np.sin(alpha_rad + beta_rad)
+        kind='max' selects the wedge with the largest force (active case);
+        kind='min' selects the smallest (passive case). Trials with a near-zero
+        denominator or non-physical force (negative or non-finite) are dropped
+        before fitting. If the interpolated vertex falls outside the surviving
+        trial theta range, or the parabola has the wrong concavity, the result
+        falls back to the trial extreme.
 
-        sqrt_term = np.sqrt((sin_phi_plus_delta * sin_phi_minus_alpha) /
-                            (sin_beta_minus_delta * sin_alpha_plus_beta))
+        Returns (theta_crit_deg, force_crit, quadratic_fit_dict, warnings).
+        """
+        assert kind in ('max', 'min')
+        warnings: List[str] = []
 
-        numerator = np.sin(beta_rad + phi_rad) ** 2
-        denominator = (np.sin(beta_rad) ** 2 * sin_beta_minus_delta *
-                       (1 + sqrt_term) ** 2)
+        valid = [t for t in trials
+                 if math.isfinite(t[force_key]) and t[force_key] > 0
+                 and t[force_key] < 1e12]
+        if len(valid) < len(trials):
+            warnings.append(
+                f"Dropped {len(trials) - len(valid)} trial(s) with non-physical "
+                f"{force_key} (singular denominator or out of range)."
+            )
 
-        return numerator / denominator
+        thetas_valid = np.array([t['theta_deg'] for t in valid])
+        forces_valid = np.array([t[force_key] for t in valid])
 
-    def calculate_coulomb_kp(self, phi: float, delta: float,
-                             beta: float = 0, alpha: float = 90) -> float:
-        """Calculate Coulomb passive earth pressure coefficient."""
-        phi_rad = np.radians(phi)
-        delta_rad = np.radians(delta)
-        beta_rad = np.radians(beta)
-        alpha_rad = np.radians(alpha)
+        extreme_idx = (int(np.argmax(forces_valid)) if kind == 'max'
+                       else int(np.argmin(forces_valid)))
+        extreme_theta = float(thetas_valid[extreme_idx])
+        extreme_force = float(forces_valid[extreme_idx])
 
-        sin_phi_minus_delta = np.sin(phi_rad - delta_rad)
-        sin_phi_plus_beta = np.sin(phi_rad + beta_rad)
-        sin_alpha_minus_delta = np.sin(alpha_rad - delta_rad)
-        sin_alpha_plus_beta = np.sin(alpha_rad + beta_rad)
+        if len(valid) < 3:
+            warnings.append("Fewer than 3 valid trials — skipping quadratic fit; "
+                            "reporting the extreme trial directly.")
+            fit = {'a': float('nan'), 'b': float('nan'), 'c': float('nan')}
+            return extreme_theta, extreme_force, fit, warnings
 
-        sqrt_term = np.sqrt(sin_phi_minus_delta * sin_phi_plus_beta /
-                            (sin_alpha_minus_delta * sin_alpha_plus_beta))
+        a, b, c_const = np.polyfit(thetas_valid, forces_valid, 2)
+        fit = {'a': float(a), 'b': float(b), 'c': float(c_const)}
 
-        numerator = np.sin(alpha_rad - phi_rad) ** 2
-        denominator = (np.sin(alpha_rad) ** 2 * sin_alpha_plus_beta *
-                       (1 - sqrt_term) ** 2)
+        concavity_ok = (a < 0) if kind == 'max' else (a > 0)
+        if not concavity_ok:
+            warnings.append(
+                "Quadratic concavity does not bracket a true "
+                f"{'maximum' if kind == 'max' else 'minimum'}; "
+                "falling back to the extreme trial."
+            )
+            return extreme_theta, extreme_force, fit, warnings
 
-        return numerator / denominator
+        theta_crit = float(-b / (2.0 * a))
+        if not (thetas_valid.min() <= theta_crit <= thetas_valid.max()):
+            warnings.append(
+                f"Interpolated vertex theta={theta_crit:.2f} deg falls outside the "
+                f"valid trial range [{thetas_valid.min():.2f}, {thetas_valid.max():.2f}]; "
+                "falling back to the extreme trial."
+            )
+            return extreme_theta, extreme_force, fit, warnings
+
+        force_crit = float(a * theta_crit ** 2 + b * theta_crit + c_const)
+        return theta_crit, force_crit, fit, warnings
+
+    def _wedge_geometry(self, H: float, theta_rad: float,
+                        alpha_rad: float, beta_rad: float) -> Tuple[float, float, float, float]:
+        """
+        Compute trial-wedge geometry for a battered wall with sloped backfill.
+
+        Coordinate frame: wall heel at origin; +x into backfill; +y up.
+        Wall back runs from (0, 0) to (-H * tan alpha, H), so positive alpha
+        leans the wall AWAY from the backfill at the top. Backfill rises from
+        the top of the wall at angle beta from horizontal. The failure plane
+        leaves the heel at angle theta from horizontal.
+
+        Returns (x_top, y_top, area, L_failure) where (x_top, y_top) is the
+        intersection of the failure plane with the backfill surface.
+        """
+        tan_a = math.tan(alpha_rad)
+        tan_b = math.tan(beta_rad)
+        tan_t = math.tan(theta_rad)
+
+        denom = tan_t - tan_b
+        if denom <= 0:
+            raise ValueError(
+                f"Failure plane angle theta={math.degrees(theta_rad):.2f} deg must exceed "
+                f"backfill slope beta={math.degrees(beta_rad):.2f} deg"
+            )
+
+        x_top = H * (1.0 + tan_a * tan_b) / denom
+        y_top = x_top * tan_t
+
+        # Shoelace area for vertices (0,0), (-H*tan_a, H), (x_top, y_top).
+        area = 0.5 * abs(H * (x_top + tan_a * y_top))
+        L_failure = math.hypot(x_top, y_top)
+
+        return x_top, y_top, area, L_failure
+
+    def calculate_coulomb_active_wedge(self, wall_height: float, gamma: float,
+                                       phi: float, c: float = 0.0,
+                                       delta: Optional[float] = None,
+                                       wall_batter_deg: float = 0.0,
+                                       backfill_slope_deg: float = 0.0) -> dict:
+        """
+        Compute the active earth thrust using a trial-wedge force-polygon method.
+
+        Geometry (see _wedge_geometry for the full coordinate convention):
+          - Vertical retained height H.
+          - wall_batter_deg (alpha): wall-back angle from vertical;
+              positive => wall leans away from backfill at the top.
+          - backfill_slope_deg (beta): backfill angle from horizontal;
+              positive => rising backfill.
+
+        Five trial failure surfaces are rotated through the soil starting from
+        the Rankine angle theta0 = 45 + phi/2 (measured CCW from horizontal at
+        the heel) at offsets -10, -5, 0, +5, +10 degrees.
+
+        Forces on the wedge (per linear foot of wall):
+            W  : self-weight, gamma * A                                [down]
+            C  : cohesion along failure plane, c * L                   [up-slope]
+            R  : reaction on failure plane, inclined phi from the failure-plane
+                 normal on the up-slope side (direction known, magnitude unknown)
+            Pa : reaction from wall on wedge, inclined delta above the wall's
+                 outward normal (so at angle alpha + delta from horizontal)
+                 (direction known, magnitude unknown)
+
+        Closing the polygon (x- and y-equilibrium) yields, in closed form:
+            Pa = [W * sin(theta - phi) - C * cos(phi)]
+                 / cos(theta - phi - delta - alpha)
+
+        As theta varies, Pa(theta) traces a curve whose peak is the critical
+        active wedge (largest force the wall must resist). A quadratic is fit
+        through the 5 trial points and the vertex (dPa/dtheta = 0) is taken as
+        the interpolated critical wedge.
+
+        Args:
+            wall_height:        H, vertical retained height
+            gamma:              soil unit weight
+            phi:                internal friction angle (degrees)
+            c:                  cohesion on failure plane
+            delta:              wall friction angle (degrees); default (2/3)*phi
+            wall_batter_deg:    alpha (degrees), default 0 (vertical wall)
+            backfill_slope_deg: beta (degrees), default 0 (horizontal backfill)
+
+        Returns:
+            Dict with each trial's geometry/forces, the initial Rankine angle,
+            the interpolated critical wedge angle and Pa, plus the input geometry
+            for traceability.
+        """
+        H = wall_height
+        phi_rad = math.radians(phi)
+        if delta is None:
+            delta = (2.0 / 3.0) * phi
+        delta_rad = math.radians(delta)
+        alpha_rad = math.radians(wall_batter_deg)
+        beta_rad = math.radians(backfill_slope_deg)
+
+        theta0_rad = math.radians(45.0) + phi_rad / 2.0
+
+        trials = []
+        for offset_deg in (-10, -5, 0, 5, 10):
+            theta_rad = theta0_rad + math.radians(offset_deg)
+            x_top, y_top, area, L = self._wedge_geometry(H, theta_rad, alpha_rad, beta_rad)
+
+            W = gamma * area
+            Cf = c * L
+
+            num = W * math.sin(theta_rad - phi_rad) - Cf * math.cos(phi_rad)
+            den = math.cos(theta_rad - phi_rad - delta_rad - alpha_rad)
+            Pa = num / den if abs(den) > 1e-9 else float('inf')
+
+            sin_tp = math.sin(theta_rad - phi_rad)
+            R = ((Cf * math.cos(theta_rad) + Pa * math.cos(alpha_rad + delta_rad)) / sin_tp
+                 if sin_tp != 0 and math.isfinite(Pa) else float('inf'))
+
+            trials.append({
+                'offset_deg': offset_deg,
+                'theta_deg': math.degrees(theta_rad),
+                'L_failure': L,
+                'wedge_area': area,
+                'wedge_weight': W,
+                'cohesion_force': Cf,
+                'R': R,
+                'Pa': Pa,
+            })
+
+        theta_crit_deg, pa_crit, fit, warns = self._interpolate_critical_wedge(
+            trials, force_key='Pa', kind='max')
+
+        return {
+            'trials': trials,
+            'theta0_deg': math.degrees(theta0_rad),
+            'theta_critical_deg': theta_crit_deg,
+            'Pa_critical': pa_crit,
+            'delta_deg': delta,
+            'wall_batter_deg': wall_batter_deg,
+            'backfill_slope_deg': backfill_slope_deg,
+            'quadratic_fit': fit,
+            'warnings': warns,
+        }
+
+    def calculate_coulomb_passive_wedge(self, wall_height: float, gamma: float,
+                                        phi: float, c: float = 0.0,
+                                        delta: Optional[float] = None,
+                                        wall_batter_deg: float = 0.0,
+                                        backfill_slope_deg: float = 0.0) -> dict:
+        """
+        Compute the passive earth thrust using a trial-wedge force-polygon method.
+
+        Geometry conventions match calculate_coulomb_active_wedge.
+
+        For passive failure the wedge slides UP the failure plane (away from the
+        wall), so friction on the failure plane and on the wall both reverse
+        direction relative to the active case. The reaction R is now inclined phi
+        from the failure-plane normal on the DOWN-slope side, and Pp is inclined
+        delta BELOW the wall's outward normal (at angle alpha - delta from
+        horizontal). Cohesion still opposes wedge motion, so it now points
+        down-slope (and adds to the resisting force).
+
+        Trial failure surfaces are rotated through the soil starting from the
+        Rankine passive angle theta0 = 45 - phi/2, at offsets -10, -5, 0, +5, +10
+        degrees. The polygon closes for:
+            Pp = [W * sin(theta + phi) + C * cos(phi)]
+                 / cos(theta + phi + delta - alpha)
+
+        The critical passive wedge MINIMISES Pp (smallest force the wall can
+        mobilise to resist motion). A quadratic is fit through the 5 trial
+        points; the vertex of the upward-opening parabola is the interpolated
+        critical wedge.
+
+        Returns:
+            Dict with each trial's geometry/forces, theta0, theta_critical, the
+            critical Pp, and the input geometry for traceability.
+        """
+        H = wall_height
+        phi_rad = math.radians(phi)
+        if delta is None:
+            delta = (2.0 / 3.0) * phi
+        delta_rad = math.radians(delta)
+        alpha_rad = math.radians(wall_batter_deg)
+        beta_rad = math.radians(backfill_slope_deg)
+
+        theta0_rad = math.radians(45.0) - phi_rad / 2.0
+
+        trials = []
+        for offset_deg in (-10, -5, 0, 5, 10):
+            theta_rad = theta0_rad + math.radians(offset_deg)
+            x_top, y_top, area, L = self._wedge_geometry(H, theta_rad, alpha_rad, beta_rad)
+
+            W = gamma * area
+            Cf = c * L
+
+            num = W * math.sin(theta_rad + phi_rad) + Cf * math.cos(phi_rad)
+            den = math.cos(theta_rad + phi_rad + delta_rad - alpha_rad)
+            Pp = num / den if abs(den) > 1e-9 else float('inf')
+
+            sin_tp = math.sin(theta_rad + phi_rad)
+            R = ((Pp * math.cos(alpha_rad - delta_rad) - Cf * math.cos(theta_rad)) / sin_tp
+                 if sin_tp != 0 and math.isfinite(Pp) else float('inf'))
+
+            trials.append({
+                'offset_deg': offset_deg,
+                'theta_deg': math.degrees(theta_rad),
+                'L_failure': L,
+                'wedge_area': area,
+                'wedge_weight': W,
+                'cohesion_force': Cf,
+                'R': R,
+                'Pp': Pp,
+            })
+
+        theta_crit_deg, pp_crit, fit, warns = self._interpolate_critical_wedge(
+            trials, force_key='Pp', kind='min')
+
+        return {
+            'trials': trials,
+            'theta0_deg': math.degrees(theta0_rad),
+            'theta_critical_deg': theta_crit_deg,
+            'Pp_critical': pp_crit,
+            'delta_deg': delta,
+            'wall_batter_deg': wall_batter_deg,
+            'backfill_slope_deg': backfill_slope_deg,
+            'quadratic_fit': fit,
+            'warnings': warns,
+        }
 
     def calculate_fhwa_envelope(self, depth: float, soil_type: str = 'sand') -> float:
         """Calculate FHWA apparent earth pressure envelope."""
@@ -1711,16 +2245,13 @@ class LateralEarthPressure:
                         depth_in_layer = depth - cumulative_depth
                         sigma_v += layer.unit_weight * depth_in_layer
 
+                        # Coulomb is now computed as a total-thrust trial-wedge analysis
+                        # via calculate_coulomb_active_wedge(); the per-layer K profile
+                        # uses Rankine.
                         if side == 'active':
-                            if self.theory == 'coulomb':
-                                K = self.calculate_coulomb_ka(layer.phi, layer.delta)
-                            else:
-                                K = self.calculate_rankine_ka(layer.phi)
-                        else:  # passive
-                            if self.theory == 'coulomb':
-                                K = self.calculate_coulomb_kp(layer.phi, layer.delta)
-                            else:
-                                K = self.calculate_rankine_kp(layer.phi)
+                            K = self.calculate_rankine_ka(layer.phi)
+                        else:
+                            K = self.calculate_rankine_kp(layer.phi)
 
                         pressure = K * sigma_v - 2 * layer.cohesion * np.sqrt(K)
                         break
@@ -1839,6 +2370,656 @@ class LateralEarthPressure:
                 shear[i] -= strut_at_depth['reaction']
 
         return shear, moment
+
+class LogSpiralEarthPressure:
+
+    """
+    Passive earth pressure via a log-spiral failure surface.
+
+    Geometry (passive case, vertical wall, horizontal ground):
+      - Top of wall at A=(0, 0) (ground level); bottom at B=(0, -H).
+      - Soil in +x. The Rankine line through A is rotated (45 - phi/2)
+        clockwise from horizontal — into the soil it has direction
+        (cos α, -sin α), α = 45° - phi/2. The trial spiral centers are
+        placed on the OPPOSITE side of A (above ground, behind the wall),
+        i.e. at parameter d along direction (-cos α, sin α):
+            O = (-d cos α, d sin α),  d >= 0.
+      - Trials start at d = 0.10*H and step outward by 0.05*H per trial,
+        moving O further away from the wall along that line, out to a
+        maximum of d = 3.0*H (default num_trials = 59).
+      - The spiral passes through B and is extended CCW until it intersects
+        the Rankine line at R, on the soil side of O. The wedge is closed by
+        the vertical line from R up to the ground at D=(x_R, 0), then back
+        along the ground to A.
+
+    Forces on the wedge (per unit wall length):
+      Pp : passive thrust on the wall face, inclined δ BELOW horizontal,
+           resultant applied H/3 above the wall bottom (triangular soil
+           pressure assumption).
+      W  : self-weight γ * Area, applied at the wedge centroid.
+      PR : Rankine ACTIVE thrust on the vertical RD line (height h = |y_R|):
+             PR = 0.5 γ h² Ka + q h Ka - 2 c h sqrt(Ka),
+             Ka = (1-sinφ)/(1+sinφ);
+           horizontal, acting on the wedge toward the wall, at the centroid
+           of the active pressure distribution.
+      C  : cohesion along the spiral surface (closed-form moment about O:
+           M_c = -c (r_R² - r_B²) / (2 tan φ); degenerates to -c r² Δθ for
+           φ → 0).
+      Q  : surcharge q on the ground surface from x=0 to x=x_R, at midspan.
+      Normal + Mohr-Coulomb friction on the spiral surface have a resultant
+      passing through O (log-spiral property), contributing zero moment.
+
+    Moment equilibrium about O (CCW positive) solves Pp directly. The
+    critical wedge MINIMISES Pp across trials; a quadratic fit interpolates
+    the minimum (falling back to the smallest trial Pp if the fit isn't
+    upward-opening or the vertex falls outside the trial range).
+    """
+
+
+    def __init__(self,
+                 wall_height: float,
+                 gamma: float,
+                 phi: float,
+                 cohesion: float = 0.0,
+                 wall_friction_delta: Optional[float] = None,
+                 surcharge: float = 0.0,
+                 num_trials: int = 59,
+                 d_init_frac: float = 0.10,
+                 d_step_frac: float = 0.05,
+                 spiral_segments: int = 60):
+        """
+        Args:
+            wall_height: H (ft or m)
+            gamma: soil unit weight (pcf or kN/m³)
+            phi: internal friction angle (degrees)
+            cohesion: c (psf or kPa)
+            wall_friction_delta: δ (degrees); default = (2/3) phi
+            surcharge: q on ground surface (psf or kPa)
+            num_trials: number of trial wedges
+            d_init_frac: first trial d as fraction of H (default 0.10).
+                d is measured along the Rankine line in the direction
+                opposite the soil (above ground, behind the wall).
+            d_step_frac: increment between trials as fraction of H (default 0.05).
+                Each step moves O further away from the wall along that line.
+            spiral_segments: spiral discretisation for area/centroid
+        """
+        self.H = wall_height
+        self.gamma = gamma
+        self.phi = phi
+        self.c = cohesion
+        self.delta = wall_friction_delta if wall_friction_delta is not None else (2.0/3.0) * phi
+        self.q = surcharge
+        self.num_trials = num_trials
+        self.d_init = d_init_frac * wall_height
+        self.d_step = d_step_frac * wall_height
+        self.spiral_segments = spiral_segments
+
+        self.phi_rad = math.radians(phi)
+        self.delta_rad = math.radians(self.delta)
+        self.alpha_rad = math.radians(45.0) - self.phi_rad / 2.0
+        self.Ka = (1.0 - math.sin(self.phi_rad)) / (1.0 + math.sin(self.phi_rad))
+
+    def _passive_trial(self, d: float) -> dict:
+        """Compute Pp for one trial wedge with spiral center O at parameter d on Rankine line."""
+        H = self.H
+        phi_rad = self.phi_rad
+        delta_rad = self.delta_rad
+        alpha = self.alpha_rad
+        gamma = self.gamma
+        c = self.c
+        q = self.q
+
+        cos_a = math.cos(alpha)
+        sin_a = math.sin(alpha)
+
+        # Spiral center on Rankine line, OPPOSITE direction from the soil
+        # (above ground, behind the wall). Each trial steps O further away.
+        Ox = -d * cos_a
+        Oy = d * sin_a
+
+        # Radius and angle from O to wall bottom B = (0, -H)
+        dx0 = -Ox
+        dy0 = -H - Oy
+        r_start = math.hypot(dx0, dy0)
+        theta_start = math.atan2(dy0, dx0)
+
+        # Rankine line crosses A and continues into the soil on the far side
+        # of O at polar angle theta = -alpha (from O). Reach it CCW from B.
+        theta_R = -alpha
+        delta_theta = theta_R - theta_start
+        if delta_theta <= 0:
+            delta_theta += 2.0 * math.pi
+
+        # Intersection point R lies along the Rankine direction at parameter
+        # t_R = r_R - d from A (since O is at -d along the Rankine line).
+
+        tan_phi = math.tan(phi_rad)
+        if abs(tan_phi) < 1e-9:
+            r_R = r_start
+        else:
+            r_R = r_start * math.exp(delta_theta * tan_phi)
+
+        # With O at -d along the Rankine line, R = O + r_R*(cos α, -sin α),
+        # which lies at parameter t_R = r_R - d from A along the soil side.
+        t_R = r_R - d
+        x_R = t_R * cos_a
+        y_R = -t_R * sin_a
+        h = -y_R   # height of Rankine zone (y_R is negative below ground)
+
+        # Discretise spiral from B to R; build closed wedge polygon CCW:
+        #   A=(0,0) -> B=(0,-H) -> spiral arc -> R=(x_R,y_R) -> D=(x_R,0) -> A
+        N = self.spiral_segments
+        spiral_pts = []
+        for i in range(N + 1):
+            th = theta_start + delta_theta * (i / N)
+            r_i = r_start if abs(tan_phi) < 1e-9 else r_start * math.exp((th - theta_start) * tan_phi)
+            spiral_pts.append((Ox + r_i * math.cos(th), Oy + r_i * math.sin(th)))
+
+        poly = [(0.0, 0.0)]
+        poly.extend(spiral_pts)   # spiral_pts[0] ≈ B, spiral_pts[-1] = R
+        poly.append((x_R, 0.0))   # D
+
+        # Shoelace area + centroid
+        cross_sum = 0.0
+        cx_num = 0.0
+        cy_num = 0.0
+        n_poly = len(poly)
+        for i in range(n_poly):
+            x1, y1 = poly[i]
+            x2, y2 = poly[(i + 1) % n_poly]
+            cross = x1 * y2 - x2 * y1
+            cross_sum += cross
+            cx_num += (x1 + x2) * cross
+            cy_num += (y1 + y2) * cross
+        area_signed = cross_sum / 2.0
+        if abs(area_signed) < 1e-12:
+            raise ValueError(f"Degenerate wedge at d={d}")
+        Cx = cx_num / (6.0 * area_signed)
+        Cy = cy_num / (6.0 * area_signed)
+        area = abs(area_signed)
+
+        W = gamma * area
+
+        # Rankine active force on vertical line RD (height h)
+        Ka = self.Ka
+        sqrt_Ka = math.sqrt(Ka)
+        PR = 0.5 * gamma * h * h * Ka + q * h * Ka - 2.0 * c * h * sqrt_Ka
+
+        # Centroid of active pressure distribution (depth below ground = positive)
+        M_about_top = (0.5 * q * Ka * h * h
+                       + gamma * Ka * h * h * h / 3.0
+                       - c * sqrt_Ka * h * h)
+        depth_PR = M_about_top / PR if abs(PR) > 1e-9 else h / 2.0
+        y_PR = -depth_PR
+
+        # Moments about O, CCW positive
+        # Pp at (0, -2H/3), F = (Pp cos δ, -Pp sin δ)
+        Pp_arm = Ox * math.sin(delta_rad) + (2.0 * H / 3.0 + Oy) * math.cos(delta_rad)
+        M_W = -W * (Cx - Ox)
+        M_PR = PR * (y_PR - Oy)
+        if abs(tan_phi) < 1e-9:
+            M_c = -c * r_start * r_start * delta_theta
+        else:
+            M_c = -c * (r_R * r_R - r_start * r_start) / (2.0 * tan_phi)
+        M_q = -q * x_R * (x_R / 2.0 - Ox)
+
+        if abs(Pp_arm) < 1e-9:
+            Pp = float('inf')
+        else:
+            Pp = -(M_W + M_PR + M_c + M_q) / Pp_arm
+
+        return {
+            'd': d,
+            'O': (Ox, Oy),
+            'r_B': r_start,
+            'r_R': r_R,
+            'theta_B_deg': math.degrees(theta_start),
+            'theta_R_deg': math.degrees(theta_R),
+            'spiral_sweep_deg': math.degrees(delta_theta),
+            'intersection': (x_R, y_R),
+            'rankine_height': h,
+            'wedge_area': area,
+            'centroid': (Cx, Cy),
+            'W': W,
+            'PR': PR,
+            'PR_depth': depth_PR,
+            'M_W': M_W,
+            'M_PR': M_PR,
+            'M_c': M_c,
+            'M_q': M_q,
+            'Pp_arm': Pp_arm,
+            'Pp': Pp,
+        }
+
+    def calculate_critical_passive(self) -> dict:
+        """Run trial wedges and interpolate the critical (minimum-Pp) wedge."""
+        trials = []
+        for i in range(self.num_trials):
+            d = self.d_init + i * self.d_step
+            try:
+                trials.append(self._passive_trial(d))
+            except (ValueError, ZeroDivisionError) as e:
+                trials.append({'d': d, 'error': str(e), 'Pp': float('inf')})
+
+        valid = [t for t in trials
+                 if 'error' not in t and math.isfinite(t['Pp']) and t['Pp'] > 0]
+        warnings: List[str] = []
+        if not valid:
+            return {
+                'trials': trials,
+                'critical_d': None,
+                'Pp_critical': None,
+                'quadratic_fit': None,
+                'warnings': ['No valid trials produced a finite, positive Pp.'],
+            }
+
+        d_arr = np.array([t['d'] for t in valid])
+        Pp_arr = np.array([t['Pp'] for t in valid])
+        idx = int(np.argmin(Pp_arr))
+        d_min = float(d_arr[idx])
+        Pp_min = float(Pp_arr[idx])
+
+        if len(valid) < 3:
+            warnings.append("Fewer than 3 valid trials; reporting the minimum trial Pp.")
+            return {'trials': trials, 'critical_d': d_min, 'Pp_critical': Pp_min,
+                    'quadratic_fit': None, 'warnings': warnings}
+
+        a, b, c_fit = np.polyfit(d_arr, Pp_arr, 2)
+        fit = {'a': float(a), 'b': float(b), 'c': float(c_fit)}
+
+        if a <= 0:
+            warnings.append("Quadratic fit is not upward-opening; falling back to minimum trial.")
+            return {'trials': trials, 'critical_d': d_min, 'Pp_critical': Pp_min,
+                    'quadratic_fit': fit, 'warnings': warnings}
+
+        d_crit = -b / (2.0 * a)
+        if not (d_arr.min() <= d_crit <= d_arr.max()):
+            warnings.append(
+                f"Interpolated vertex d={d_crit:.3f} outside trial range "
+                f"[{d_arr.min():.3f}, {d_arr.max():.3f}]; using minimum trial.")
+            return {'trials': trials, 'critical_d': d_min, 'Pp_critical': Pp_min,
+                    'quadratic_fit': fit, 'warnings': warnings}
+
+        Pp_crit = float(a * d_crit * d_crit + b * d_crit + c_fit)
+        if Pp_crit <= 0 or Pp_crit < 0.5 * Pp_min:
+            warnings.append(
+                f"Interpolated vertex Pp={Pp_crit:.2f} is below the data envelope "
+                f"(min trial Pp={Pp_min:.2f}); trial range likely doesn't bracket a "
+                "minimum (Pp(d) appears monotonic). Falling back to minimum trial.")
+            return {'trials': trials, 'critical_d': d_min, 'Pp_critical': Pp_min,
+                    'quadratic_fit': fit, 'warnings': warnings}
+        return {'trials': trials, 'critical_d': float(d_crit),
+                'Pp_critical': Pp_crit, 'quadratic_fit': fit, 'warnings': warnings}
+
+    def print_report(self) -> dict:
+        result = self.calculate_critical_passive()
+        print("\n" + "=" * 110)
+        print("LOG-SPIRAL PASSIVE EARTH PRESSURE")
+        print("=" * 110)
+        print(f"  Wall height H            : {self.H:.3f}")
+        print(f"  Soil unit weight gamma   : {self.gamma:.2f}")
+        print(f"  Friction angle phi       : {self.phi:.2f} deg")
+        print(f"  Cohesion c               : {self.c:.2f}")
+        print(f"  Wall friction delta      : {self.delta:.2f} deg")
+        print(f"  Surcharge q              : {self.q:.2f}")
+        print(f"  Rankine angle 45 - phi/2 : {math.degrees(self.alpha_rad):.2f} deg")
+        print(f"  Ka                       : {self.Ka:.4f}")
+        print(f"  Trials                   : {self.num_trials}, d_start={self.d_init:.3f}, "
+              f"step={self.d_step:.3f}")
+        print("-" * 110)
+        print(f"  {'d':<8} {'Ox':<8} {'Oy':<9} {'x_R':<8} {'y_R':<9} {'h':<8} "
+              f"{'Area':<10} {'W':<10} {'PR':<10} {'Pp':<12}")
+        for t in result['trials']:
+            if 'error' in t:
+                print(f"  {t['d']:<8.3f} ERROR: {t['error']}")
+                continue
+            Ox, Oy = t['O']
+            xR, yR = t['intersection']
+            print(f"  {t['d']:<8.3f} {Ox:<8.3f} {Oy:<9.3f} {xR:<8.3f} {yR:<9.3f} "
+                  f"{t['rankine_height']:<8.3f} {t['wedge_area']:<10.2f} "
+                  f"{t['W']:<10.2f} {t['PR']:<10.2f} {t['Pp']:<12.2f}")
+        print("-" * 110)
+        if result.get('Pp_critical') is not None:
+            print(f"  Critical wedge: d = {result['critical_d']:.4f}")
+            print(f"  Critical passive force Pp = {result['Pp_critical']:.2f} per unit wall length")
+        for w in result.get('warnings', []):
+            print(f"  WARNING: {w}")
+        print("=" * 110)
+        return result
+
+
+class Liquefaction:
+    """
+    Liquefaction triggering analysis and factor of safety per Youd et al. (2001),
+    "Liquefaction Resistance of Soils: Summary Report from the 1996 NCEER and
+    1998 NCEER/NSF Workshops on Evaluation of Liquefaction Resistance of Soils,"
+    J. Geotech. Geoenviron. Eng., 127(10), 817-833.
+
+    Procedure (SPT-based, simplified Seed-Idriss method):
+      1) Cyclic Stress Ratio (CSR), Seed and Idriss (1971):
+             CSR = 0.65 * (a_max/g) * (sigma_v / sigma'_v) * r_d
+         Stress reduction r_d from Liao and Whitman (1986), as adopted in Youd
+         et al. (2001) eqs. (5):
+             z <= 9.15 m :  r_d = 1.0   - 0.00765 z
+             9.15 < z <= 23 m : r_d = 1.174 - 0.0267  z
+             23 < z <= 30 m :   r_d = 0.744 - 0.008   z
+             z > 30 m :         r_d = 0.5
+         (z in meters below ground surface.)
+
+      2) Cyclic Resistance Ratio (CRR_7.5), NCEER SPT clean-sand base curve,
+         Youd et al. (2001) eq. (4):
+             CRR_7.5 = 1/(34 - (N1)60cs) + (N1)60cs/135
+                       + 50/(10*(N1)60cs + 45)^2 - 1/200
+         Valid for (N1)60cs < 30; at (N1)60cs >= 30 the soil is treated as too
+         dense to liquefy (FS reported as a large sentinel).
+
+      3) Fines correction to (N1)60cs, Youd et al. (2001) eqs. (6a-c, 7a-c):
+             (N1)60cs = alpha + beta * (N1)60
+         with alpha, beta functions of fines content FC (%).
+
+      4) Magnitude Scaling Factor (MSF), Idriss recommendation in
+         Youd et al. (2001) eq. (24):
+             MSF = 10^2.24 / M_w^2.56
+
+      5) Overburden correction K_sigma, Hynes-Olsen in Youd et al. (2001):
+             K_sigma = (sigma'_v / Pa)^(f-1),  f ~ 0.7-0.8 for typical sands
+         Computed only when sigma'_v > Pa; else K_sigma = 1. K_alpha (sloping
+         ground) is left at 1.0 (level ground).
+
+      6) Factor of Safety against triggering:
+             FS = (CRR_7.5 / CSR) * MSF * K_sigma
+
+    Susceptibility screening uses the soil-type codes in borings_data:
+      types 1-4 (sands, gravelly sand) are screened in; type 5 (clayey sand)
+      and type 6 (silts) are screened in only if FC < 35% — borderline
+      candidates that still need the Bray and Sancio (2006) check the user
+      should review. Layers above the groundwater table are unsaturated and
+      not analyzed.
+    """
+
+    G_FT_S2 = 32.174   # gravity, ft/s^2 (for a_max input in ft/s^2 or as fraction of g)
+    PA_PSF = 2116.0    # atmospheric pressure, psf
+    M_PER_FT = 0.3048
+    FS_NON_LIQUEFIABLE = 99.0   # sentinel for non-susceptible / too-dense layers
+
+    DEFAULT_FINES = {
+        1: 5.0,    # Sand (NC)
+        2: 5.0,    # Sand (saturated)
+        3: 5.0,    # Sand (OC)
+        4: 3.0,    # Gravelly Sand
+        5: 25.0,   # Clayey Sand
+        6: 50.0,   # Silts, sandy silts, clayey silt
+    }
+
+    SUSCEPTIBLE_TYPES = {1, 2, 3, 4, 5, 6}
+
+    def __init__(self,
+                 borings_data: dict,
+                 magnitude: float,
+                 peak_acceleration_g: float,
+                 gwt_depth: float,
+                 unit_weight: float = 120.0,
+                 atm_pressure_psf: float = 2116.0,
+                 fines_content: Optional[dict] = None,
+                 k_sigma_exponent_f: float = 0.75):
+        """
+        Args:
+            borings_data: dict produced by SPT/N60 with keys
+                {boring_id: {'depths': [ft], 'n_values': [...],
+                             'n60_values': [...], 'n160_values': [...],
+                             'soil types': [1..6]}}
+            magnitude: design earthquake moment magnitude M_w
+            peak_acceleration_g: peak ground surface acceleration as fraction of g
+            gwt_depth: groundwater table depth (ft) below ground surface
+            unit_weight: representative moist unit weight (pcf) used when a layer
+                lacks a unit weight; effective unit weight below the gwt is
+                unit_weight - 62.4
+            atm_pressure_psf: atmospheric pressure Pa (psf), default 2116
+            fines_content: optional dict {boring_id: [FC% per depth]}; if a
+                boring or a depth is missing, falls back to DEFAULT_FINES
+                keyed by soil type
+            k_sigma_exponent_f: exponent f in K_sigma = (sigma'_v/Pa)^(f-1);
+                Youd et al. (2001) suggests f ~ 0.7-0.8 for typical sands
+        """
+        self.borings_data = borings_data
+        self.M_w = magnitude
+        self.amax_g = peak_acceleration_g
+        self.gwt_depth = gwt_depth
+        self.gamma = unit_weight
+        self.Pa = atm_pressure_psf
+        self.fines = fines_content or {}
+        self.f_exp = k_sigma_exponent_f
+
+    @staticmethod
+    def _rd(z_ft: float) -> float:
+        """Liao and Whitman (1986) stress reduction coefficient; z input in ft, converted to m."""
+        z_m = z_ft * Liquefaction.M_PER_FT
+        if z_m <= 9.15:
+            return 1.0 - 0.00765 * z_m
+        if z_m <= 23.0:
+            return 1.174 - 0.0267 * z_m
+        if z_m <= 30.0:
+            return 0.744 - 0.008 * z_m
+        return 0.5
+
+    def _stresses(self, depth_ft: float) -> Tuple[float, float]:
+        """Return (total stress sigma_v, effective stress sigma'_v) at depth, in psf."""
+        sigma_v = self.gamma * depth_ft
+        if depth_ft <= self.gwt_depth:
+            sigma_v_eff = sigma_v
+        else:
+            u = 62.4 * (depth_ft - self.gwt_depth)
+            sigma_v_eff = sigma_v - u
+        return sigma_v, sigma_v_eff
+
+    @staticmethod
+    def _fines_correction(N1_60: float, FC: float) -> float:
+        """Youd et al. (2001) eqs. (6a-c, 7a-c): convert (N1)60 to equivalent clean-sand (N1)60cs."""
+        if FC <= 5.0:
+            alpha = 0.0
+            beta = 1.0
+        elif FC < 35.0:
+            alpha = math.exp(1.76 - 190.0 / (FC ** 2))
+            beta = 0.99 + (FC ** 1.5) / 1000.0
+        else:
+            alpha = 5.0
+            beta = 1.2
+        return alpha + beta * N1_60
+
+    @staticmethod
+    def _crr_7p5(N1_60cs: float) -> float:
+        """NCEER SPT clean-sand base curve, Youd et al. (2001) eq. (4)."""
+        if N1_60cs >= 30.0:
+            return float('inf')   # treat as non-liquefiable
+        return (1.0 / (34.0 - N1_60cs)
+                + N1_60cs / 135.0
+                + 50.0 / (10.0 * N1_60cs + 45.0) ** 2
+                - 1.0 / 200.0)
+
+    def _msf(self) -> float:
+        """Idriss MSF per Youd et al. (2001) eq. (24)."""
+        return (10.0 ** 2.24) / (self.M_w ** 2.56)
+
+    def _k_sigma(self, sigma_v_eff_psf: float) -> float:
+        """Hynes-Olsen K_sigma; capped at 1.0 for sigma'_v <= Pa."""
+        if sigma_v_eff_psf <= self.Pa:
+            return 1.0
+        return (sigma_v_eff_psf / self.Pa) ** (self.f_exp - 1.0)
+
+    def _fc_for(self, boring_id: str, idx: int, soil_type: int) -> float:
+        per_boring = self.fines.get(boring_id)
+        if per_boring is not None and idx < len(per_boring) and per_boring[idx] is not None:
+            return float(per_boring[idx])
+        return self.DEFAULT_FINES.get(soil_type, 15.0)
+
+    def analyze_boring(self, boring_id: str) -> dict:
+        """Run liquefaction triggering analysis for one boring."""
+        if boring_id not in self.borings_data:
+            raise ValueError(f"Boring '{boring_id}' not found")
+        data = self.borings_data[boring_id]
+        depths = data.get('depths')
+        n160 = data.get('n160_values')
+        soil_types = data.get('soil types') or data.get('soil_types')
+        if not depths or not n160 or not soil_types:
+            raise ValueError(
+                f"Boring '{boring_id}' missing required fields. "
+                "Need depths, n160_values, and soil types (run SPT -> N60 first)."
+            )
+
+        msf = self._msf()
+        rows = []
+        for i, (z, N160, st) in enumerate(zip(depths, n160, soil_types)):
+            sigma_v, sigma_v_eff = self._stresses(z)
+            rd = self._rd(z)
+
+            if z <= self.gwt_depth:
+                rows.append({
+                    'depth_ft': z, 'soil_type': st, 'N160': N160,
+                    'sigma_v_psf': sigma_v, 'sigma_v_eff_psf': sigma_v_eff,
+                    'r_d': rd, 'CSR': None, 'CRR_7_5': None,
+                    'N1_60cs': None, 'FC_pct': None,
+                    'MSF': msf, 'K_sigma': None, 'FS': None,
+                    'status': 'above groundwater - not liquefiable',
+                })
+                continue
+
+            if st not in self.SUSCEPTIBLE_TYPES:
+                rows.append({
+                    'depth_ft': z, 'soil_type': st, 'N160': N160,
+                    'sigma_v_psf': sigma_v, 'sigma_v_eff_psf': sigma_v_eff,
+                    'r_d': rd, 'CSR': None, 'CRR_7_5': None,
+                    'N1_60cs': None, 'FC_pct': None,
+                    'MSF': msf, 'K_sigma': None, 'FS': self.FS_NON_LIQUEFIABLE,
+                    'status': f'soil type {st} not susceptible',
+                })
+                continue
+
+            FC = self._fc_for(boring_id, i, st)
+
+            if st in (5, 6) and FC >= 35.0:
+                rows.append({
+                    'depth_ft': z, 'soil_type': st, 'N160': N160,
+                    'sigma_v_psf': sigma_v, 'sigma_v_eff_psf': sigma_v_eff,
+                    'r_d': rd, 'CSR': None, 'CRR_7_5': None,
+                    'N1_60cs': None, 'FC_pct': FC,
+                    'MSF': msf, 'K_sigma': None, 'FS': self.FS_NON_LIQUEFIABLE,
+                    'status': f'fines-dominated (FC={FC:.0f}%) - check Bray & Sancio (2006)',
+                })
+                continue
+
+            CSR = 0.65 * self.amax_g * (sigma_v / sigma_v_eff) * rd
+            N1_60cs = self._fines_correction(N160, FC)
+            CRR = self._crr_7p5(N1_60cs)
+            K_sig = self._k_sigma(sigma_v_eff)
+
+            if math.isinf(CRR):
+                FS = self.FS_NON_LIQUEFIABLE
+                status = '(N1)60cs >= 30 - too dense to liquefy'
+            elif CSR <= 0:
+                FS = self.FS_NON_LIQUEFIABLE
+                status = 'CSR <= 0'
+            else:
+                FS = (CRR / CSR) * msf * K_sig
+                status = 'liquefiable' if FS < 1.0 else 'marginal' if FS < 1.3 else 'safe'
+
+            rows.append({
+                'depth_ft': z, 'soil_type': st, 'N160': N160,
+                'sigma_v_psf': sigma_v, 'sigma_v_eff_psf': sigma_v_eff,
+                'r_d': rd, 'CSR': CSR, 'CRR_7_5': CRR if math.isfinite(CRR) else None,
+                'N1_60cs': N1_60cs, 'FC_pct': FC,
+                'MSF': msf, 'K_sigma': K_sig, 'FS': FS,
+                'status': status,
+            })
+
+        return {'boring_id': boring_id, 'M_w': self.M_w, 'amax_g': self.amax_g,
+                'gwt_depth_ft': self.gwt_depth, 'rows': rows}
+
+    def analyze_all(self) -> dict:
+        return {bid: self.analyze_boring(bid) for bid in self.borings_data}
+
+    def run(self):
+        """Interactive terminal flow. Expects borings_data populated by SPT and N60."""
+        if not self.borings_data:
+            print("Error: no borings data. Run SPT -> N60 first.")
+            return
+        missing = [bid for bid, d in self.borings_data.items() if not d.get('n160_values')]
+        if missing:
+            print("Error: missing n160_values in borings: " + ", ".join(missing))
+            print("Run N60 calculator first.")
+            return
+
+        print("\n" + "=" * 70)
+        print("Liquefaction Analysis - Youd et al. (2001)")
+        print("=" * 70)
+        try:
+            self.M_w = float(input(f"Earthquake magnitude M_w [{self.M_w}]: ").strip() or self.M_w)
+            self.amax_g = float(input(f"Peak ground accel a_max (g) [{self.amax_g}]: ").strip() or self.amax_g)
+            self.gwt_depth = float(input(f"Groundwater table depth (ft) [{self.gwt_depth}]: ").strip() or self.gwt_depth)
+            self.gamma = float(input(f"Moist unit weight (pcf) [{self.gamma}]: ").strip() or self.gamma)
+            self.Pa = float(input(f"Atmospheric pressure (psf) [{self.Pa}]: ").strip() or self.Pa)
+            self.f_exp = float(input(f"K_sigma exponent f (0.7-0.8) [{self.f_exp}]: ").strip() or self.f_exp)
+        except ValueError as e:
+            print(f"Error: invalid input ({e})")
+            return
+
+        for bid in self.borings_data:
+            ans = input(f"Override fines content (FC %) for {bid}? (y/N): ").strip().lower()
+            if ans.startswith('y'):
+                n = len(self.borings_data[bid].get('depths', []))
+                try:
+                    raw = input(f"  Enter {n} FC values (comma-separated, %): ").strip()
+                    fc_list = [float(x.strip()) for x in raw.split(',')]
+                    if len(fc_list) != n:
+                        print(f"  Expected {n} values, got {len(fc_list)}. Using soil-type defaults.")
+                    else:
+                        self.fines[bid] = fc_list
+                except ValueError:
+                    print("  Invalid input; using soil-type defaults.")
+
+        self.print_report()
+
+    def print_report(self) -> dict:
+        results = self.analyze_all()
+        print("\n" + "=" * 110)
+        print("LIQUEFACTION ANALYSIS - Youd et al. (2001)")
+        print("=" * 110)
+        print(f"  Earthquake magnitude M_w : {self.M_w:.2f}")
+        print(f"  Peak ground accel a_max  : {self.amax_g:.3f} g")
+        print(f"  Groundwater table        : {self.gwt_depth:.2f} ft")
+        print(f"  Unit weight (moist)      : {self.gamma:.1f} pcf")
+        print(f"  Atmospheric pressure Pa  : {self.Pa:.0f} psf")
+        print(f"  K_sigma exponent f       : {self.f_exp:.2f}")
+
+        for bid, r in results.items():
+            print("\n" + "-" * 110)
+            print(f"BORING: {bid}")
+            print("-" * 110)
+            header = (f"{'Depth':<7} {'Type':<5} {'N160':<7} "
+                      f"{'sigv':<8} {chr(963)+chr(39)+'v':<8} {'rd':<6} "
+                      f"{'CSR':<7} {'(N1)cs':<8} {'CRR':<7} {'K_sig':<7} "
+                      f"{'FS':<7} {'Status':<32}")
+            print(header)
+            for row in r['rows']:
+                def f(v, fmt):
+                    return format(v, fmt) if isinstance(v, (int, float)) and v is not None else 'N/A'
+                print(f"{row['depth_ft']:<7.1f} {row['soil_type']:<5} "
+                      f"{row['N160']:<7.2f} "
+                      f"{row['sigma_v_psf']:<8.0f} {row['sigma_v_eff_psf']:<8.0f} "
+                      f"{row['r_d']:<6.3f} "
+                      f"{f(row['CSR'], '<7.3f')} "
+                      f"{f(row['N1_60cs'], '<8.2f')} "
+                      f"{f(row['CRR_7_5'], '<7.3f')} "
+                      f"{f(row['K_sigma'], '<7.3f')} "
+                      f"{f(row['FS'], '<7.2f')} "
+                      f"{row['status']:<32}")
+        print("\n" + "=" * 110)
+        print("Notes: FS < 1.0 = liquefiable, 1.0-1.3 = marginal, > 1.3 = safe.")
+        print("       FS = 99.0 sentinel marks layers screened out (non-susceptible / too dense).")
+        print("       Saturated silts/clayey sands with FC >= 35% should also be checked")
+        print("       against Bray & Sancio (2006) criteria.")
+        print("=" * 110)
+        return results
+
 
 if __name__ == "__main__":
     main_menu()
